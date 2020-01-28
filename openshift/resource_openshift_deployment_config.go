@@ -182,9 +182,11 @@ func resourceOpenshiftDeploymentConfig() *schema.Resource {
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
 									"type": {
-										Type:        schema.TypeString,
-										Description: "(string) Type of the trigger",
-										Optional:    true,
+										Type:         schema.TypeString,
+										Description:  "(string) Type of the trigger",
+										Optional:     true,
+										Default:      "ConfigChange",
+										ValidateFunc: validation.StringInSlice([]string{"ImageChange", "ConfigChange"}, false),
 									},
 									"image_change_params": {
 										Type:        schema.TypeList,
