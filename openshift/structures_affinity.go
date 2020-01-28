@@ -67,7 +67,7 @@ func flattenPodAntiAffinity(in *v1.PodAntiAffinity) []interface{} {
 }
 
 func flattenWeightedPodAffinityTerms(in []v1.WeightedPodAffinityTerm) []interface{} {
-	att := make([]interface{}, len(in), len(in))
+	att := make([]interface{}, len(in))
 	for i, n := range in {
 		m := make(map[string]interface{})
 		m["weight"] = int(n.Weight)
@@ -78,7 +78,7 @@ func flattenWeightedPodAffinityTerms(in []v1.WeightedPodAffinityTerm) []interfac
 }
 
 func flattenPodAffinityTerms(in []v1.PodAffinityTerm) []interface{} {
-	att := make([]interface{}, len(in), len(in))
+	att := make([]interface{}, len(in))
 	for i, n := range in {
 		m := make(map[string]interface{})
 		m["namespaces"] = newStringSet(schema.HashString, n.Namespaces)
@@ -103,7 +103,7 @@ func flattenNodeSelector(in *v1.NodeSelector) []interface{} {
 }
 
 func flattenPreferredSchedulingTerm(in []v1.PreferredSchedulingTerm) []interface{} {
-	att := make([]interface{}, len(in), len(in))
+	att := make([]interface{}, len(in))
 	for i, n := range in {
 		m := make(map[string]interface{})
 		m["weight"] = int(n.Weight)
@@ -182,7 +182,7 @@ func expandPreferredSchedulingTerms(t []interface{}) []v1.PreferredSchedulingTer
 	if len(t) == 0 || t[0] == nil {
 		return []v1.PreferredSchedulingTerm{}
 	}
-	obj := make([]v1.PreferredSchedulingTerm, len(t), len(t))
+	obj := make([]v1.PreferredSchedulingTerm, len(t))
 	for i, n := range t {
 		in := n.(map[string]interface{})
 		if v, ok := in["weight"].(int); ok {
@@ -211,7 +211,7 @@ func expandPodAffinityTerms(t []interface{}) []v1.PodAffinityTerm {
 	if len(t) == 0 || t[0] == nil {
 		return []v1.PodAffinityTerm{}
 	}
-	obj := make([]v1.PodAffinityTerm, len(t), len(t))
+	obj := make([]v1.PodAffinityTerm, len(t))
 	for i, n := range t {
 		in := n.(map[string]interface{})
 		if v, ok := in["label_selector"].([]interface{}); ok && len(v) > 0 {
@@ -231,7 +231,7 @@ func expandWeightedPodAffinityTerms(t []interface{}) []v1.WeightedPodAffinityTer
 	if len(t) == 0 || t[0] == nil {
 		return []v1.WeightedPodAffinityTerm{}
 	}
-	obj := make([]v1.WeightedPodAffinityTerm, len(t), len(t))
+	obj := make([]v1.WeightedPodAffinityTerm, len(t))
 	for i, n := range t {
 		in := n.(map[string]interface{})
 		if v, ok := in["weight"].(int); ok {

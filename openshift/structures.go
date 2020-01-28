@@ -1,7 +1,6 @@
 package openshift
 
 import (
-	"encoding/base64"
 	"fmt"
 	"net/url"
 	"strings"
@@ -55,7 +54,7 @@ func expandMetadata(in []interface{}) metav1.ObjectMeta {
 }
 
 func patchMetadata(keyPrefix, pathPrefix string, d *schema.ResourceData) PatchOperations {
-	ops := make([]PatchOperation, 0, 0)
+	ops := make([]PatchOperation, 0)
 	if d.HasChange(keyPrefix + "annotations") {
 		oldV, newV := d.GetChange(keyPrefix + "annotations")
 		diffOps := diffStringMap(pathPrefix+"annotations", oldV.(map[string]interface{}), newV.(map[string]interface{}))
@@ -77,27 +76,8 @@ func expandStringMap(m map[string]interface{}) map[string]string {
 	return result
 }
 
-func expandBase64MapToByteMap(m map[string]interface{}) map[string][]byte {
-	result := make(map[string][]byte)
-	for k, v := range m {
-		b, err := base64.StdEncoding.DecodeString(v.(string))
-		if err == nil {
-			result[k] = b
-		}
-	}
-	return result
-}
-
-func expandStringMapToByteMap(m map[string]interface{}) map[string][]byte {
-	result := make(map[string][]byte)
-	for k, v := range m {
-		result[k] = []byte(v.(string))
-	}
-	return result
-}
-
 func expandStringSlice(s []interface{}) []string {
-	result := make([]string, len(s), len(s))
+	result := make([]string, len(s))
 	for k, v := range s {
 		// Handle the Terraform parser bug which turns empty strings in lists to nil.
 		if v == nil {
@@ -170,28 +150,8 @@ func isInternalKey(annotationKey string) bool {
 	return false
 }
 
-func flattenByteMapToBase64Map(m map[string][]byte) map[string]string {
-	result := make(map[string]string)
-	for k, v := range m {
-		result[k] = base64.StdEncoding.EncodeToString([]byte(v))
-	}
-	return result
-}
-
-func flattenByteMapToStringMap(m map[string][]byte) map[string]string {
-	result := make(map[string]string)
-	for k, v := range m {
-		result[k] = string(v)
-	}
-	return result
-}
-
 func ptrToString(s string) *string {
 	return &s
-}
-
-func ptrToInt(i int) *int {
-	return &i
 }
 
 func ptrToBool(b bool) *bool {
@@ -207,18 +167,9 @@ func ptrToInt64(i int64) *int64 {
 }
 
 func sliceOfString(slice []interface{}) []string {
-	result := make([]string, len(slice), len(slice))
+	result := make([]string, len(slice))
 	for i, s := range slice {
 		result[i] = s.(string)
-	}
-	return result
-}
-
-func base64EncodeStringMap(m map[string]interface{}) map[string]interface{} {
-	result := make(map[string]interface{})
-	for k, v := range m {
-		value := v.(string)
-		result[k] = (base64.StdEncoding.EncodeToString([]byte(value)))
 	}
 	return result
 }
@@ -255,213 +206,19 @@ func expandMapToResourceList(m map[string]interface{}) (*api.ResourceList, error
 	return &out, nil
 }
 
-func flattenPersistentVolumeAccessModes(in []api.PersistentVolumeAccessMode) *schema.Set {
-	var out = make([]interface{}, len(in), len(in))
-	for i, v := range in {
-		out[i] = string(v)
-	}
-	return schema.NewSet(schema.HashString, out)
-}
-
-func expandPersistentVolumeAccessModes(s []interface{}) []api.PersistentVolumeAccessMode {
-	out := make([]api.PersistentVolumeAccessMode, len(s), len(s))
-	for i, v := range s {
-		out[i] = api.PersistentVolumeAccessMode(v.(string))
-	}
-	return out
-}
-
-func flattenResourceQuotaSpec(in api.ResourceQuotaSpec) []interface{} {
-	out := make([]interface{}, 1)
-
-	m := make(map[string]interface{}, 0)
-	m["hard"] = flattenResourceList(in.Hard)
-	m["scopes"] = flattenResourceQuotaScopes(in.Scopes)
-
-	out[0] = m
-	return out
-}
-
-func expandResourceQuotaSpec(s []interface{}) (*api.ResourceQuotaSpec, error) {
-	out := &api.ResourceQuotaSpec{}
-	if len(s) < 1 {
-		return out, nil
-	}
-	m := s[0].(map[string]interface{})
-
-	if v, ok := m["hard"]; ok {
-		list, err := expandMapToResourceList(v.(map[string]interface{}))
-		if err != nil {
-			return out, err
-		}
-		out.Hard = *list
-	}
-
-	if v, ok := m["scopes"]; ok {
-		out.Scopes = expandResourceQuotaScopes(v.(*schema.Set).List())
-	}
-
-	return out, nil
-}
-
-func flattenResourceQuotaScopes(in []api.ResourceQuotaScope) *schema.Set {
-	out := make([]string, len(in), len(in))
-	for i, scope := range in {
-		out[i] = string(scope)
-	}
-	return newStringSet(schema.HashString, out)
-}
-
-func expandResourceQuotaScopes(s []interface{}) []api.ResourceQuotaScope {
-	out := make([]api.ResourceQuotaScope, len(s), len(s))
-	for i, scope := range s {
-		out[i] = api.ResourceQuotaScope(scope.(string))
-	}
-	return out
-}
-
 func newStringSet(f schema.SchemaSetFunc, in []string) *schema.Set {
-	var out = make([]interface{}, len(in), len(in))
+	var out = make([]interface{}, len(in))
 	for i, v := range in {
 		out[i] = v
 	}
 	return schema.NewSet(f, out)
 }
 func newInt64Set(f schema.SchemaSetFunc, in []int64) *schema.Set {
-	var out = make([]interface{}, len(in), len(in))
+	var out = make([]interface{}, len(in))
 	for i, v := range in {
 		out[i] = int(v)
 	}
 	return schema.NewSet(f, out)
-}
-
-func resourceListEquals(x, y api.ResourceList) bool {
-	for k, v := range x {
-		yValue, ok := y[k]
-		if !ok {
-			return false
-		}
-		if v.Cmp(yValue) != 0 {
-			return false
-		}
-	}
-	for k, v := range y {
-		xValue, ok := x[k]
-		if !ok {
-			return false
-		}
-		if v.Cmp(xValue) != 0 {
-			return false
-		}
-	}
-	return true
-}
-
-func expandLimitRangeSpec(s []interface{}, isNew bool) (*api.LimitRangeSpec, error) {
-	out := &api.LimitRangeSpec{}
-	if len(s) < 1 || s[0] == nil {
-		return out, nil
-	}
-	m := s[0].(map[string]interface{})
-
-	if limits, ok := m["limit"].([]interface{}); ok {
-		newLimits := make([]api.LimitRangeItem, len(limits), len(limits))
-
-		for i, l := range limits {
-			lrItem := api.LimitRangeItem{}
-			limit := l.(map[string]interface{})
-
-			if v, ok := limit["type"]; ok {
-				lrItem.Type = api.LimitType(v.(string))
-			}
-
-			// defaultRequest is forbidden for Pod limits, even though it's set & returned by API
-			// this is how we avoid sending it back
-			if v, ok := limit["default_request"]; ok {
-				drm := v.(map[string]interface{})
-				if lrItem.Type == api.LimitTypePod && len(drm) > 0 {
-					if isNew {
-						return out, fmt.Errorf("limit.%d.default_request cannot be set for Pod limit", i)
-					}
-				} else {
-					el, err := expandMapToResourceList(drm)
-					if err != nil {
-						return out, err
-					}
-					lrItem.DefaultRequest = *el
-				}
-			}
-
-			if v, ok := limit["default"]; ok {
-				el, err := expandMapToResourceList(v.(map[string]interface{}))
-				if err != nil {
-					return out, err
-				}
-				lrItem.Default = *el
-			}
-			if v, ok := limit["max"]; ok {
-				el, err := expandMapToResourceList(v.(map[string]interface{}))
-				if err != nil {
-					return out, err
-				}
-				lrItem.Max = *el
-			}
-			if v, ok := limit["max_limit_request_ratio"]; ok {
-				el, err := expandMapToResourceList(v.(map[string]interface{}))
-				if err != nil {
-					return out, err
-				}
-				lrItem.MaxLimitRequestRatio = *el
-			}
-			if v, ok := limit["min"]; ok {
-				el, err := expandMapToResourceList(v.(map[string]interface{}))
-				if err != nil {
-					return out, err
-				}
-				lrItem.Min = *el
-			}
-
-			newLimits[i] = lrItem
-		}
-
-		out.Limits = newLimits
-	}
-
-	return out, nil
-}
-
-func flattenLimitRangeSpec(in api.LimitRangeSpec) []interface{} {
-	if len(in.Limits) == 0 {
-		return []interface{}{}
-	}
-
-	out := make([]interface{}, 1)
-	limits := make([]interface{}, len(in.Limits), len(in.Limits))
-
-	for i, l := range in.Limits {
-		m := make(map[string]interface{}, 0)
-		m["default"] = flattenResourceList(l.Default)
-		m["default_request"] = flattenResourceList(l.DefaultRequest)
-		m["max"] = flattenResourceList(l.Max)
-		m["max_limit_request_ratio"] = flattenResourceList(l.MaxLimitRequestRatio)
-		m["min"] = flattenResourceList(l.Min)
-		m["type"] = string(l.Type)
-
-		limits[i] = m
-	}
-	out[0] = map[string]interface{}{
-		"limit": limits,
-	}
-	return out
-}
-
-func schemaSetToStringArray(set *schema.Set) []string {
-	array := make([]string, 0, set.Len())
-	for _, elem := range set.List() {
-		e := elem.(string)
-		array = append(array, e)
-	}
-	return array
 }
 
 func schemaSetToInt64Array(set *schema.Set) []int64 {
@@ -471,17 +228,6 @@ func schemaSetToInt64Array(set *schema.Set) []int64 {
 		array = append(array, int64(e))
 	}
 	return array
-}
-func flattenLabelSelectorRequirementList(l []metav1.LabelSelectorRequirement) []interface{} {
-	att := make([]map[string]interface{}, len(l))
-	for i, v := range l {
-		m := map[string]interface{}{}
-		m["key"] = v.Key
-		m["values"] = newStringSet(schema.HashString, v.Values)
-		m["operator"] = string(v.Operator)
-		att[i] = m
-	}
-	return []interface{}{att}
 }
 
 func flattenLocalObjectReferenceArray(in []api.LocalObjectReference) []interface{} {
@@ -508,37 +254,6 @@ func expandLocalObjectReferenceArray(in []interface{}) []api.LocalObjectReferenc
 			att[i].Name = name.(string)
 		}
 	}
-	return att
-}
-
-func flattenServiceAccountSecrets(in []api.ObjectReference, defaultSecretName string) []interface{} {
-	att := make([]interface{}, 0)
-	for _, v := range in {
-		if v.Name == defaultSecretName {
-			continue
-		}
-		m := map[string]interface{}{}
-		if v.Name != "" {
-			m["name"] = v.Name
-		}
-		att = append(att, m)
-	}
-	return att
-}
-
-func expandServiceAccountSecrets(in []interface{}, defaultSecretName string) []api.ObjectReference {
-	att := make([]api.ObjectReference, 0)
-
-	for _, c := range in {
-		p := c.(map[string]interface{})
-		if name, ok := p["name"]; ok {
-			att = append(att, api.ObjectReference{Name: name.(string)})
-		}
-	}
-	if defaultSecretName != "" {
-		att = append(att, api.ObjectReference{Name: defaultSecretName})
-	}
-
 	return att
 }
 
@@ -596,7 +311,7 @@ func expandNodeSelectorTerm(l []interface{}) *api.NodeSelectorTerm {
 }
 
 func flattenNodeSelectorTerms(in []api.NodeSelectorTerm) []interface{} {
-	att := make([]interface{}, len(in), len(in))
+	att := make([]interface{}, len(in))
 	for i, n := range in {
 		att[i] = flattenNodeSelectorTerm(n)[0]
 	}
@@ -607,7 +322,7 @@ func expandNodeSelectorTerms(l []interface{}) []api.NodeSelectorTerm {
 	if len(l) == 0 || l[0] == nil {
 		return []api.NodeSelectorTerm{}
 	}
-	obj := make([]api.NodeSelectorTerm, len(l), len(l))
+	obj := make([]api.NodeSelectorTerm, len(l))
 	for i, n := range l {
 		obj[i] = *expandNodeSelectorTerm([]interface{}{n})
 	}

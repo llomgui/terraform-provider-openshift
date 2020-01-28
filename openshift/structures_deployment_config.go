@@ -61,7 +61,7 @@ func flattenTriggers(triggers []api.DeploymentTriggerPolicy) ([]interface{}, err
 func flattenImageChangeParams(in *api.DeploymentTriggerImageChangeParams) []interface{} {
 	att := make(map[string]interface{})
 
-	if in.Automatic == true || in.Automatic == false {
+	if in.Automatic {
 		att["automatic"] = in.Automatic
 	}
 

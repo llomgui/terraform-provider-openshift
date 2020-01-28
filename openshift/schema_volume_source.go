@@ -4,12 +4,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 )
 
-func persistentVolumeSourceSchema() *schema.Resource {
-	return &schema.Resource{
-		Schema: commonVolumeSources(),
-	}
-}
-
 // Common volume sources between Persistent Volumes and Pod Volumes
 func commonVolumeSources() map[string]*schema.Schema {
 	return map[string]*schema.Schema{

@@ -247,6 +247,9 @@ func resourceOpenshiftDeploymentConfig() *schema.Resource {
 
 func resourceOpenshiftDeploymentConfigCreate(d *schema.ResourceData, meta interface{}) error {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
+	if err != nil {
+		return err
+	}
 
 	metadata := expandMetadata(d.Get("metadata").([]interface{}))
 	spec, err := expandDeploymentConfigSpec(d.Get("spec").([]interface{}))
@@ -282,6 +285,9 @@ func resourceOpenshiftDeploymentConfigCreate(d *schema.ResourceData, meta interf
 
 func resourceOpenshiftDeploymentConfigRead(d *schema.ResourceData, meta interface{}) error {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
+	if err != nil {
+		return err
+	}
 
 	namespace, name, err := idParts(d.Id())
 	if err != nil {
@@ -316,6 +322,9 @@ func resourceOpenshiftDeploymentConfigRead(d *schema.ResourceData, meta interfac
 
 func resourceOpenshiftDeploymentConfigUpdate(d *schema.ResourceData, meta interface{}) error {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
+	if err != nil {
+		return err
+	}
 
 	namespace, name, err := idParts(d.Id())
 	if err != nil {
@@ -357,6 +366,9 @@ func resourceOpenshiftDeploymentConfigUpdate(d *schema.ResourceData, meta interf
 
 func resourceOpenshiftDeploymentConfigDelete(d *schema.ResourceData, meta interface{}) error {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
+	if err != nil {
+		return err
+	}
 
 	namespace, name, err := idParts(d.Id())
 	if err != nil {
@@ -376,6 +388,9 @@ func resourceOpenshiftDeploymentConfigDelete(d *schema.ResourceData, meta interf
 
 func resourceOpenshiftDeploymentConfigExists(d *schema.ResourceData, meta interface{}) (bool, error) {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
+	if err != nil {
+		return true, err
+	}
 
 	namespace, name, err := idParts(d.Id())
 	if err != nil {

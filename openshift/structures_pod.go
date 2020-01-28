@@ -957,30 +957,3 @@ func expandVolumes(volumes []interface{}) ([]v1.Volume, error) {
 	}
 	return vl, nil
 }
-
-func patchPodSpec(pathPrefix, prefix string, d *schema.ResourceData) (PatchOperations, error) {
-	ops := make([]PatchOperation, 0)
-
-	if d.HasChange(prefix + "active_deadline_seconds") {
-		v := d.Get(prefix + "active_deadline_seconds").(int)
-		ops = append(ops, &ReplaceOperation{
-			Path:  pathPrefix + "/activeDeadlineSeconds",
-			Value: v,
-		})
-	}
-
-	if d.HasChange(prefix + "container") {
-		containers := d.Get(prefix + "container").([]interface{})
-		value, _ := expandContainers(containers)
-
-		for i, v := range value {
-			ops = append(ops, &ReplaceOperation{
-				Path:  pathPrefix + "/containers/" + strconv.Itoa(i) + "/image",
-				Value: v.Image,
-			})
-
-		}
-
-	}
-	return ops, nil
-}

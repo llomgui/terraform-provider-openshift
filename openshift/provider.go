@@ -132,9 +132,9 @@ func Provider() terraform.ResourceProvider {
 		},
 
 		ResourcesMap: map[string]*schema.Resource{
-			"openshift_project": resourceOpenshiftProject(),
+			"openshift_project":           resourceOpenshiftProject(),
+			"openshift_deployment_config": resourceOpenshiftDeploymentConfig(),
 			//"openshift_route":             resourceOpenshiftRoute(),
-			//"openshift_deployment_config": resourceOpenshiftDeploymentConfig(),
 			//"openshift_build_config":      resourceOpenshiftBuildConfig(),
 			//"openshift_image_stream":      resourceOpenshiftImageStream(),
 			//"openshift_secret":            resourceOpenshiftSecret(),
@@ -255,7 +255,7 @@ func tryLoadingConfigFile(d *schema.ResourceData) (*restclient.Config, error) {
 	authInfo, authInfoOk := d.GetOk("config_context_auth_info")
 	cluster, clusterOk := d.GetOk("config_context_cluster")
 	if ctxOk || authInfoOk || clusterOk {
-		ctxSuffix = "; overriden context"
+		ctxSuffix = "; overridden context"
 		if ctxOk {
 			overrides.CurrentContext = ctx.(string)
 			ctxSuffix += fmt.Sprintf("; config ctx: %s", overrides.CurrentContext)
