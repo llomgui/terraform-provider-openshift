@@ -1,7 +1,6 @@
 package openshift
 
 import (
-	"encoding/base64"
 	"fmt"
 	"strconv"
 	"strings"
@@ -22,38 +21,6 @@ func validateAnnotations(value interface{}, key string) (ws []string, es []error
 			}
 		}
 	}
-	return
-}
-
-func validateBase64Encoded(v interface{}, key string) (ws []string, es []error) {
-	s, ok := v.(string)
-	if !ok {
-		es = []error{fmt.Errorf("%s: must be a non-nil base64-encoded string", key)}
-		return
-	}
-
-	_, err := base64.StdEncoding.DecodeString(s)
-	if err != nil {
-		es = []error{fmt.Errorf("%s: must be a base64-encoded string", key)}
-		return
-	}
-	return
-}
-
-func validateBase64EncodedMap(value interface{}, key string) (ws []string, es []error) {
-	m, ok := value.(map[string]interface{})
-	if !ok {
-		es = []error{fmt.Errorf("%s: must be a map of strings to base64 encoded strings", key)}
-		return
-	}
-
-	for k, v := range m {
-		_, errs := validateBase64Encoded(v, k)
-		for _, e := range errs {
-			es = append(es, fmt.Errorf("%s (%q) %s", k, v, e))
-		}
-	}
-
 	return
 }
 
@@ -118,9 +85,9 @@ func validatePortName(value interface{}, key string) (ws []string, es []error) {
 	return
 }
 func validatePortNumOrName(value interface{}, key string) (ws []string, es []error) {
-	switch value.(type) {
+	switch value := value.(type) {
 	case string:
-		intVal, err := strconv.Atoi(value.(string))
+		intVal, err := strconv.Atoi(value)
 		if err != nil {
 			return validatePortName(value, key)
 		}
@@ -134,27 +101,6 @@ func validatePortNumOrName(value interface{}, key string) (ws []string, es []err
 	}
 }
 
-func validateResourceList(value interface{}, key string) (ws []string, es []error) {
-	m := value.(map[string]interface{})
-	for k, value := range m {
-		if _, ok := value.(int); ok {
-			continue
-		}
-
-		if v, ok := value.(string); ok {
-			_, err := resource.ParseQuantity(v)
-			if err != nil {
-				es = append(es, fmt.Errorf("%s.%s (%q): %s", key, k, v, err))
-			}
-			continue
-		}
-
-		err := "Value can be either string or int"
-		es = append(es, fmt.Errorf("%s.%s (%#v): %s", key, k, value, err))
-	}
-	return
-}
-
 func validateResourceQuantity(value interface{}, key string) (ws []string, es []error) {
 	if v, ok := value.(string); ok {
 		_, err := resource.ParseQuantity(v)
@@ -165,37 +111,10 @@ func validateResourceQuantity(value interface{}, key string) (ws []string, es []
 	return
 }
 
-func validateNonNegativeInteger(value interface{}, key string) (ws []string, es []error) {
-	v := value.(int)
-	if v < 0 {
-		es = append(es, fmt.Errorf("%s must be greater than or equal to 0", key))
-	}
-	return
-}
-
 func validatePositiveInteger(value interface{}, key string) (ws []string, es []error) {
 	v := value.(int)
 	if v <= 0 {
 		es = append(es, fmt.Errorf("%s must be greater than 0", key))
-	}
-	return
-}
-
-func validateDNSPolicy(value interface{}, key string) (ws []string, es []error) {
-	v := value.(string)
-	if v != "ClusterFirst" && v != "Default" {
-		es = append(es, fmt.Errorf("%s must be either ClusterFirst or Default", key))
-	}
-	return
-}
-
-func validateRestartPolicy(value interface{}, key string) (ws []string, es []error) {
-	v := value.(string)
-	switch v {
-	case "Always", "OnFailure", "Never":
-		return
-	default:
-		es = append(es, fmt.Errorf("%s must be one of Always, OnFailure or Never ", key))
 	}
 	return
 }

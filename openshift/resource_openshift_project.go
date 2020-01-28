@@ -36,7 +36,10 @@ func resourceOpenshiftProject() *schema.Resource {
 }
 
 func resourceOpenshiftProjectCreate(d *schema.ResourceData, meta interface{}) error {
-	conn, err := client_v1.NewForConfig(meta.(*rest.Config))
+	client, err := client_v1.NewForConfig(meta.(*rest.Config))
+	if err != nil {
+		return err
+	}
 
 	metadata := expandMetadata(d.Get("metadata").([]interface{}))
 	project := api.Project{
@@ -44,7 +47,7 @@ func resourceOpenshiftProjectCreate(d *schema.ResourceData, meta interface{}) er
 	}
 
 	log.Printf("[INFO] Creating new project: %#v", project)
-	out, err := conn.Projects().Create(&project)
+	out, err := client.Projects().Create(&project)
 	if err != nil {
 		return err
 	}
@@ -55,11 +58,14 @@ func resourceOpenshiftProjectCreate(d *schema.ResourceData, meta interface{}) er
 }
 
 func resourceOpenshiftProjectRead(d *schema.ResourceData, meta interface{}) error {
-	conn, err := client_v1.NewForConfig(meta.(*rest.Config))
+	client, err := client_v1.NewForConfig(meta.(*rest.Config))
+	if err != nil {
+		return err
+	}
 
 	name := d.Id()
 	log.Printf("[INFO] Reading project %s", name)
-	project, err := conn.Projects().Get(name, meta_v1.GetOptions{})
+	project, err := client.Projects().Get(name, meta_v1.GetOptions{})
 	if err != nil {
 		log.Printf("[DEBUG] Received error: %#v", err)
 		return err
@@ -74,7 +80,10 @@ func resourceOpenshiftProjectRead(d *schema.ResourceData, meta interface{}) erro
 }
 
 func resourceOpenshiftProjectUpdate(d *schema.ResourceData, meta interface{}) error {
-	conn, err := client_v1.NewForConfig(meta.(*rest.Config))
+	client, err := client_v1.NewForConfig(meta.(*rest.Config))
+	if err != nil {
+		return err
+	}
 
 	ops := patchMetadata("metadata.0.", "/metadata/", d)
 	metadata, err := ops.MarshalJSON()
@@ -83,7 +92,7 @@ func resourceOpenshiftProjectUpdate(d *schema.ResourceData, meta interface{}) er
 	}
 
 	log.Printf("[INFO] Updating project: %s", ops)
-	out, err := conn.Projects().Patch(d.Id(), pkgApi.JSONPatchType, metadata)
+	out, err := client.Projects().Patch(d.Id(), pkgApi.JSONPatchType, metadata)
 	if err != nil {
 		return err
 	}
@@ -94,11 +103,14 @@ func resourceOpenshiftProjectUpdate(d *schema.ResourceData, meta interface{}) er
 }
 
 func resourceOpenshiftProjectDelete(d *schema.ResourceData, meta interface{}) error {
-	conn, err := client_v1.NewForConfig(meta.(*rest.Config))
+	client, err := client_v1.NewForConfig(meta.(*rest.Config))
+	if err != nil {
+		return err
+	}
 
 	name := d.Id()
 	log.Printf("[INFO] Deleting project: %#v", name)
-	err = conn.Projects().Delete(name, &meta_v1.DeleteOptions{})
+	err = client.Projects().Delete(name, &meta_v1.DeleteOptions{})
 	if err != nil {
 		return err
 	}
@@ -108,7 +120,7 @@ func resourceOpenshiftProjectDelete(d *schema.ResourceData, meta interface{}) er
 		Pending: []string{"Terminating"},
 		Timeout: d.Timeout(schema.TimeoutDelete),
 		Refresh: func() (interface{}, string, error) {
-			out, err := conn.Projects().Get(name, meta_v1.GetOptions{})
+			out, err := client.Projects().Get(name, meta_v1.GetOptions{})
 			if err != nil {
 				if statusErr, ok := err.(*errors.StatusError); ok && statusErr.ErrStatus.Code == 404 {
 					return nil, "", nil
@@ -134,11 +146,14 @@ func resourceOpenshiftProjectDelete(d *schema.ResourceData, meta interface{}) er
 }
 
 func resourceOpenshiftProjectExists(d *schema.ResourceData, meta interface{}) (bool, error) {
-	conn, err := client_v1.NewForConfig(meta.(*rest.Config))
+	client, err := client_v1.NewForConfig(meta.(*rest.Config))
+	if err != nil {
+		return true, err
+	}
 
 	name := d.Id()
 	log.Printf("[INFO] Checking project %s", name)
-	_, err = conn.Projects().Get(name, meta_v1.GetOptions{})
+	_, err = client.Projects().Get(name, meta_v1.GetOptions{})
 	if err != nil {
 		if statusErr, ok := err.(*errors.StatusError); ok && statusErr.ErrStatus.Code == 404 {
 			return false, nil

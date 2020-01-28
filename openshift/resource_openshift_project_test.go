@@ -301,7 +301,10 @@ func testAccCheckMetaLabels(om *meta_v1.ObjectMeta, expected map[string]string) 
 }
 
 func testAccCheckOpenshiftProjectDestroy(s *terraform.State) error {
-	conn, err := client_v1.NewForConfig(testAccProvider.Meta().(*rest.Config))
+	client, err := client_v1.NewForConfig(testAccProvider.Meta().(*rest.Config))
+	if err != nil {
+		return err
+	}
 
 	if err != nil {
 		return err
@@ -312,7 +315,7 @@ func testAccCheckOpenshiftProjectDestroy(s *terraform.State) error {
 			continue
 		}
 
-		resp, err := conn.Projects().Get(rs.Primary.ID, meta_v1.GetOptions{})
+		resp, err := client.Projects().Get(rs.Primary.ID, meta_v1.GetOptions{})
 		if err == nil {
 			if resp.Name == rs.Primary.ID {
 				return fmt.Errorf("Project still exists: %s", rs.Primary.ID)
@@ -330,8 +333,11 @@ func testAccCheckOpenshiftProjectExists(n string, obj *api.Project) resource.Tes
 			return fmt.Errorf("Not found: %s", n)
 		}
 
-		conn, err := client_v1.NewForConfig(testAccProvider.Meta().(*rest.Config))
-		out, err := conn.Projects().Get(rs.Primary.ID, meta_v1.GetOptions{})
+		client, err := client_v1.NewForConfig(testAccProvider.Meta().(*rest.Config))
+		if err != nil {
+			return err
+		}
+		out, err := client.Projects().Get(rs.Primary.ID, meta_v1.GetOptions{})
 		if err != nil {
 			return err
 		}
