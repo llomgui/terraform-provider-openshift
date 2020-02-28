@@ -120,6 +120,9 @@ func resourceOpenshiftRoute() *schema.Resource {
 
 func resourceOpenshiftRouteCreate(d *schema.ResourceData, meta interface{}) error {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
+	if err != nil {
+		return err
+	}
 
 	metadata := expandMetadata(d.Get("metadata").([]interface{}))
 	route := api.Route{
@@ -140,6 +143,9 @@ func resourceOpenshiftRouteCreate(d *schema.ResourceData, meta interface{}) erro
 
 func resourceOpenshiftRouteRead(d *schema.ResourceData, meta interface{}) error {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
+	if err != nil {
+		return err
+	}
 
 	namespace, name, err := idParts(d.Id())
 	if err != nil {
@@ -174,6 +180,9 @@ func resourceOpenshiftRouteRead(d *schema.ResourceData, meta interface{}) error 
 
 func resourceOpenshiftRouteUpdate(d *schema.ResourceData, meta interface{}) error {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
+	if err != nil {
+		return err
+	}
 
 	namespace, name, err := idParts(d.Id())
 	if err != nil {
@@ -208,6 +217,9 @@ func resourceOpenshiftRouteUpdate(d *schema.ResourceData, meta interface{}) erro
 
 func resourceOpenshiftRouteDelete(d *schema.ResourceData, meta interface{}) error {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
+	if err != nil {
+		return err
+	}
 
 	namespace, name, err := idParts(d.Id())
 	if err != nil {
@@ -227,6 +239,9 @@ func resourceOpenshiftRouteDelete(d *schema.ResourceData, meta interface{}) erro
 
 func resourceOpenshiftRouteExists(d *schema.ResourceData, meta interface{}) (bool, error) {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
+	if err != nil {
+		return true, err
+	}
 
 	namespace, name, err := idParts(d.Id())
 	if err != nil {

@@ -135,7 +135,7 @@ func expandRouteTargetReference(l []interface{}) v1.RouteTargetReference {
 }
 
 func patchRouteSpec(keyPrefix, pathPrefix string, data *schema.ResourceData) (PatchOperations, error) {
-	ops := make([]PatchOperation, 0, 0)
+	ops := make([]PatchOperation, 0)
 	if data.HasChange(keyPrefix + "host") {
 		ops = append(ops, &ReplaceOperation{
 			Path:  pathPrefix + "host",

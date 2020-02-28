@@ -132,13 +132,9 @@ func Provider() terraform.ResourceProvider {
 		},
 
 		ResourcesMap: map[string]*schema.Resource{
-			"openshift_project":           resourceOpenshiftProject(),
 			"openshift_deployment_config": resourceOpenshiftDeploymentConfig(),
-			//"openshift_route":             resourceOpenshiftRoute(),
-			//"openshift_build_config":      resourceOpenshiftBuildConfig(),
-			//"openshift_image_stream":      resourceOpenshiftImageStream(),
-			//"openshift_secret":            resourceOpenshiftSecret(),
-			//"openshift_netnamespace":      resourceOpenshiftNetNamespace(),
+			"openshift_project":           resourceOpenshiftProject(),
+			"openshift_route":             resourceOpenshiftRoute(),
 		},
 	}
 
