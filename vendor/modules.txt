@@ -347,11 +347,22 @@ github.com/nbutton23/zxcvbn-go/utils/math
 github.com/oklog/run
 # github.com/openshift/api v3.9.1-0.20190322043348-8741ff068a47+incompatible
 github.com/openshift/api/apps/v1
+github.com/openshift/api/build/v1
+github.com/openshift/api/image/docker10
+github.com/openshift/api/image/dockerpre012
+github.com/openshift/api/image/v1
+github.com/openshift/api/network/v1
 github.com/openshift/api/project/v1
 github.com/openshift/api/route/v1
 # github.com/openshift/client-go v0.0.0-20180830153425-431ec9a26e50
 github.com/openshift/client-go/apps/clientset/versioned/scheme
 github.com/openshift/client-go/apps/clientset/versioned/typed/apps/v1
+github.com/openshift/client-go/build/clientset/versioned/scheme
+github.com/openshift/client-go/build/clientset/versioned/typed/build/v1
+github.com/openshift/client-go/image/clientset/versioned/scheme
+github.com/openshift/client-go/image/clientset/versioned/typed/image/v1
+github.com/openshift/client-go/network/clientset/versioned/scheme
+github.com/openshift/client-go/network/clientset/versioned/typed/network/v1
 github.com/openshift/client-go/project/clientset/versioned/scheme
 github.com/openshift/client-go/project/clientset/versioned/typed/project/v1
 github.com/openshift/client-go/route/clientset/versioned/scheme

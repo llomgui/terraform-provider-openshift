@@ -9,6 +9,7 @@ import (
 	api "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 func idParts(id string) (string, string, error) {
@@ -138,7 +139,7 @@ func isKeyInMap(key string, d map[string]interface{}) bool {
 
 func isInternalKey(annotationKey string) bool {
 	u, err := url.Parse("//" + annotationKey)
-	if err == nil && strings.HasSuffix(u.Hostname(), "openshift.io") {
+	if err == nil && strings.HasSuffix(u.Hostname(), "openshift.io") && u.EscapedPath() != "/description" && u.EscapedPath() != "/display-name" {
 		return true
 	}
 
@@ -326,5 +327,78 @@ func expandNodeSelectorTerms(l []interface{}) []api.NodeSelectorTerm {
 	for i, n := range l {
 		obj[i] = *expandNodeSelectorTerm([]interface{}{n})
 	}
+	return obj
+}
+
+func flattenObjectReference(in api.ObjectReference) []interface{} {
+	att := make(map[string]interface{})
+
+	if in.APIVersion != "" {
+		att["api_version"] = in.APIVersion
+	}
+
+	if in.FieldPath != "" {
+		att["field_path"] = in.FieldPath
+	}
+
+	if in.Kind != "" {
+		att["kind"] = in.Kind
+	}
+
+	if in.Name != "" {
+		att["name"] = in.Name
+	}
+
+	if in.Namespace != "" {
+		att["namespace"] = in.Namespace
+	}
+
+	if in.ResourceVersion != "" {
+		att["resource_version"] = in.ResourceVersion
+	}
+
+	if in.UID != "" {
+		att["uid"] = in.UID
+	}
+
+	return []interface{}{att}
+}
+
+func expandBuildConfigImageDefinitionPtr(l []interface{}) *api.ObjectReference {
+	obj := &api.ObjectReference{}
+	if len(l) == 0 || l[0] == nil {
+		return obj
+	}
+
+	in := l[0].(map[string]interface{})
+
+	if v, ok := in["api_version"].(string); ok {
+		obj.APIVersion = v
+	}
+
+	if v, ok := in["field_path"].(string); ok {
+		obj.FieldPath = v
+	}
+
+	if v, ok := in["kind"].(string); ok {
+		obj.Kind = v
+	}
+
+	if v, ok := in["name"].(string); ok {
+		obj.Name = v
+	}
+
+	if v, ok := in["namespace"].(string); ok {
+		obj.Namespace = v
+	}
+
+	if v, ok := in["resource_version"].(string); ok {
+		obj.ResourceVersion = v
+	}
+
+	if v, ok := in["uid"].(string); ok {
+		obj.UID = types.UID(v)
+	}
+
 	return obj
 }
