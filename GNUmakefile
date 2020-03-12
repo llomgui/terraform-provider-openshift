@@ -1,5 +1,6 @@
-PKG_NAME=openshift
+TEST?=$$(go list ./... |grep -v 'vendor')
 WEBSITE_REPO=github.com/hashicorp/terraform-website
+PKG_NAME=openshift
 
 export GO111MODULE=on
 
@@ -70,15 +71,13 @@ release: build-envs
 
 .PHONY: test
 test:
-	TF_ACC= SAKURACLOUD_APPEND_USER_AGENT="$(UNIT_TEST_UA)" go test -v $(TESTARGS) -timeout=30s ./...
+	go test -i $(TEST) || exit 1
+	echo $(TEST) | \
+		xargs -t -n4 go test $(TESTARGS) -timeout=30s -parallel=4
 
 .PHONY: testacc
 testacc:
-	TF_ACC=1 SAKURACLOUD_APPEND_USER_AGENT="$(ACC_TEST_UA)" go test -v $(TESTARGS) -timeout 240m ./...
-
-.PHONY: testfake
-testfake:
-	FAKE_MODE=1 TF_ACC=1 SAKURACLOUD_APPEND_USER_AGENT="$(ACC_TEST_UA)" go test -v $(TESTARGS) -timeout 240m ./...
+	TF_ACC=1 go test $(TEST) -v $(TESTARGS) -timeout 120m
 
 .PHONY: lint
 lint:

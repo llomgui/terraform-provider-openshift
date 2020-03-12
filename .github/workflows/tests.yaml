@@ -71,5 +71,5 @@ jobs:
       - name: Setup tools
         run: make tools
 
-      - name: make testfake
-        run: make testfake
+      - name: make test
+        run: make test
