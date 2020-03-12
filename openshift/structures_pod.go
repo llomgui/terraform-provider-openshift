@@ -665,7 +665,6 @@ func expandKeyPath(in []interface{}) []v1.KeyToPath {
 		if v, ok := p["path"].(string); ok {
 			keyPaths[i].Path = v
 		}
-
 	}
 	return keyPaths
 }

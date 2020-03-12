@@ -74,6 +74,7 @@ func resourceOpenshiftDeploymentConfig() *schema.Resource {
 						},
 						"selector": {
 							Type:        schema.TypeMap,
+							Elem:        &schema.Schema{Type: schema.TypeString},
 							Description: "(object) Selector is a label query over pods that should match the Replicas count.",
 							Optional:    true,
 							ForceNew:    true,
@@ -418,7 +419,7 @@ func GetDeploymentConfigCondition(status api.DeploymentConfigStatus, condType ap
 	return nil
 }
 
-func waitForDeploymentReplicasFunc(client *client_v1.AppsV1Client, ns, name string) resource.RetryFunc {
+func waitForDeploymentReplicasFunc(client client_v1.DeploymentConfigsGetter, ns, name string) resource.RetryFunc {
 	return func() *resource.RetryError {
 		// Query the deployment to get a status update.
 		dply, err := client.DeploymentConfigs(ns).Get(name, meta_v1.GetOptions{})

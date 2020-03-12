@@ -3,7 +3,7 @@ package openshift
 import (
 	"strconv"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
@@ -43,7 +43,6 @@ func flattenContainerSecurityContext(in *v1.SecurityContext) []interface{} {
 		att["se_linux_options"] = flattenSeLinuxOptions(in.SELinuxOptions)
 	}
 	return []interface{}{att}
-
 }
 
 func flattenSecurityCapabilities(in *v1.Capabilities) []interface{} {
@@ -271,11 +270,9 @@ func flattenContainerVolumeMounts(in []v1.VolumeMount) ([]interface{}, error) {
 
 		if v.MountPath != "" {
 			m["mount_path"] = v.MountPath
-
 		}
 		if v.Name != "" {
 			m["name"] = v.Name
-
 		}
 		if v.SubPath != "" {
 			m["sub_path"] = v.SubPath
@@ -436,7 +433,6 @@ func expandContainers(ctrs []interface{}) ([]v1.Container, error) {
 		}
 
 		if v, ok := ctr["resources"].([]interface{}); ok && len(v) > 0 {
-
 			var err error
 			crr, err := expandContainerResourceRequirements(v)
 			if err != nil {
@@ -688,8 +684,8 @@ func expandHandlers(l []interface{}) *v1.Handler {
 		obj.TCPSocket = expandTCPSocket(v)
 	}
 	return &obj
-
 }
+
 func expandLifeCycle(l []interface{}) *v1.Lifecycle {
 	if len(l) == 0 || l[0] == nil {
 		return &v1.Lifecycle{}
@@ -821,8 +817,8 @@ func expandConfigMapKeyRef(r []interface{}) (*v1.ConfigMapKeySelector, error) {
 		obj.Name = v
 	}
 	return obj, nil
-
 }
+
 func expandFieldRef(r []interface{}) (*v1.ObjectFieldSelector, error) {
 	if len(r) == 0 || r[0] == nil {
 		return &v1.ObjectFieldSelector{}, nil
@@ -838,6 +834,7 @@ func expandFieldRef(r []interface{}) (*v1.ObjectFieldSelector, error) {
 	}
 	return obj, nil
 }
+
 func expandResourceFieldRef(r []interface{}) (*v1.ResourceFieldSelector, error) {
 	if len(r) == 0 || r[0] == nil {
 		return &v1.ResourceFieldSelector{}, nil
@@ -920,7 +917,6 @@ func expandEnvValueFrom(r []interface{}) (*v1.EnvVarSource, error) {
 		}
 	}
 	return obj, nil
-
 }
 
 func expandConfigMapRef(r []interface{}) (*v1.ConfigMapEnvSource, error) {

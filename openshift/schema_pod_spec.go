@@ -75,7 +75,7 @@ func podSpecFields(isUpdatable, isDeprecated, isComputed bool) map[string]*schem
 						Optional:    true,
 						Elem: &schema.Schema{
 							Type:         schema.TypeString,
-							ValidateFunc: validation.SingleIP(),
+							ValidateFunc: validation.IsIPAddress,
 						},
 					},
 					"option": {
@@ -190,6 +190,7 @@ func podSpecFields(isUpdatable, isDeprecated, isComputed bool) map[string]*schem
 		},
 		"node_selector": {
 			Type:        schema.TypeMap,
+			Elem:        &schema.Schema{Type: schema.TypeString},
 			Optional:    true,
 			Computed:    isComputed,
 			Description: "NodeSelector is a selector which must be true for the pod to fit on a node. Selector which must match a node's labels for the pod to be scheduled on that node. More info: http://kubernetes.io/docs/user-guide/node-selection.",

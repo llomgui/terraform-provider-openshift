@@ -27,6 +27,7 @@ website/node_modules
 *.iml
 
 website/vendor
+website-current
 
 # Test exclusions
 !command/test-fixtures/**/*.tfstate

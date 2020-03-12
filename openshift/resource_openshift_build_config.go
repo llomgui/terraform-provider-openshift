@@ -49,6 +49,7 @@ func resourceOpenshiftBuildConfig() *schema.Resource {
 						},
 						"node_selector": {
 							Type:        schema.TypeMap,
+							Elem:        &schema.Schema{Type: schema.TypeString},
 							Optional:    true,
 							Computed:    true,
 							Description: "(object) nodeSelector is a selector which must be true for the build pod to fit on a node If nil, it can be overridden by default build nodeselector values for the cluster. If set to an empty map or a map with any values, default build nodeselector values are ignored.",
