@@ -575,7 +575,6 @@ func probeSchema() *schema.Resource {
 	return &schema.Resource{
 		Schema: h,
 	}
-
 }
 
 func securityContextSchema() *schema.Resource {

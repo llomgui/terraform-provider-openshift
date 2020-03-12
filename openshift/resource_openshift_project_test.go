@@ -112,7 +112,7 @@ func TestAccOpenshiftProject_basic(t *testing.T) {
 	})
 }
 
-func TestAccOpenshiftProject_importBasic(t *testing.T) {
+func TestAccImportOpenshiftProject_basic(t *testing.T) {
 	resourceName := "openshift_project.test"
 	nsName := fmt.Sprintf("tf-acc-test-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
 
@@ -204,7 +204,7 @@ func TestAccOpenshiftProject_withSpecialCharacters(t *testing.T) {
 	})
 }
 
-func TestAccOpenshiftProject_importGeneratedName(t *testing.T) {
+func TestAccImportOpenshiftProject_generatedName(t *testing.T) {
 	resourceName := "openshift_project.test"
 	prefix := "tf-acc-test-gen-import-"
 

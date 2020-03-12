@@ -155,7 +155,6 @@ func Provider() terraform.ResourceProvider {
 }
 
 func providerConfigure(d *schema.ResourceData, terraformVersion string) (interface{}, error) {
-
 	var cfg *restclient.Config
 	var err error
 	if d.Get("load_config_file").(bool) {

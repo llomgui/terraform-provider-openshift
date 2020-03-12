@@ -3,6 +3,7 @@ package openshift
 import (
 	"fmt"
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -107,13 +108,15 @@ func resourceOpenshiftNetNamespaceRead(d *schema.ResourceData, meta interface{})
 		return err
 	}
 
-	err = d.Set("netid", netNamespace.NetID)
+	err = d.Set("netid", strconv.FormatUint(uint64(netNamespace.NetID), 10))
 	if err != nil {
 		return err
 	}
 
 	if len(netNamespace.EgressIPs) > 0 {
-		d.Set("egress_ips", newStringSet(schema.HashString, netNamespace.EgressIPs))
+		if err := d.Set("egress_ips", newStringSet(schema.HashString, netNamespace.EgressIPs)); err != nil {
+			return fmt.Errorf("error setting egress_ips: %s", err)
+		}
 	}
 
 	return nil

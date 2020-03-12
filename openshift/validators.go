@@ -189,6 +189,5 @@ func validateAttributeValueIsIn(validValues []string) schema.SchemaValidateFunc 
 				k, validValues, input))
 		}
 		return
-
 	}
 }

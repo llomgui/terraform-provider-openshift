@@ -256,6 +256,7 @@ func commonVolumeSources() map[string]*schema.Schema {
 					},
 					"options": {
 						Type:        schema.TypeMap,
+						Elem:        &schema.Schema{Type: schema.TypeString},
 						Description: "Extra command options if any.",
 						Optional:    true,
 					},
