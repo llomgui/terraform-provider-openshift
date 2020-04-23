@@ -81,7 +81,7 @@ testacc:
 
 .PHONY: lint
 lint:
-	golangci-lint run ./...
+	golangci-lint -mod=readonly run ./...
 
 .PHONY: tflint
 tflint:
