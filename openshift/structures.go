@@ -1,6 +1,7 @@
 package openshift
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net/url"
 	"strings"
@@ -90,6 +91,14 @@ func expandStringSlice(s []interface{}) []string {
 	return result
 }
 
+func expandStringMapToByteMap(m map[string]interface{}) map[string][]byte {
+	result := make(map[string][]byte)
+	for k, v := range m {
+		result[k] = []byte(v.(string))
+	}
+	return result
+}
+
 func flattenMetadata(meta metav1.ObjectMeta, d *schema.ResourceData, metaPrefix ...string) []interface{} {
 	m := make(map[string]interface{})
 	prefix := ""
@@ -151,6 +160,14 @@ func isInternalKey(annotationKey string) bool {
 	return false
 }
 
+func flattenByteMapToStringMap(m map[string][]byte) map[string]string {
+	result := make(map[string]string)
+	for k, v := range m {
+		result[k] = string(v)
+	}
+	return result
+}
+
 func ptrToString(s string) *string {
 	return &s
 }
@@ -171,6 +188,15 @@ func sliceOfString(slice []interface{}) []string {
 	result := make([]string, len(slice))
 	for i, s := range slice {
 		result[i] = s.(string)
+	}
+	return result
+}
+
+func base64EncodeStringMap(m map[string]interface{}) map[string]interface{} {
+	result := make(map[string]interface{})
+	for k, v := range m {
+		value := v.(string)
+		result[k] = (base64.StdEncoding.EncodeToString([]byte(value)))
 	}
 	return result
 }
