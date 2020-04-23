@@ -138,6 +138,7 @@ func Provider() terraform.ResourceProvider {
 			"openshift_route":             resourceOpenshiftRoute(),
 			"openshift_netnamespace":      resourceOpenshiftNetNamespace(),
 			"openshift_build_config":      resourceOpenshiftBuildConfig(),
+			"openshift_secret":            resourceOpenshiftSecret(),
 		},
 	}
 
