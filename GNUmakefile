@@ -17,7 +17,6 @@ tools:
 	GO111MODULE=off go get github.com/bflad/tfproviderdocs
 	GO111MODULE=off go get github.com/bflad/tfproviderlint/cmd/tfproviderlintx
 	GO111MODULE=off go get github.com/client9/misspell/cmd/misspell
-	GO111MODULE=on go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.24.0
 
 
 .PHONY: build-envs
@@ -81,7 +80,7 @@ testacc:
 
 .PHONY: lint
 lint:
-	golangci-lint -mod=readonly run ./...
+	golangci-lint run ./...
 
 .PHONY: tflint
 tflint:
