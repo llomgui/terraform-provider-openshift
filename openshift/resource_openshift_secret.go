@@ -61,6 +61,9 @@ func decodeBase64Value(value interface{}) ([]byte, error) {
 
 func resourceOpenshiftSecretCreate(d *schema.ResourceData, meta interface{}) error {
 	conn, err := kubernetes.NewForConfig(meta.(*rest.Config))
+	if err != nil {
+		return err
+	}
 
 	// Merge data and base64-encoded data into a single data map
 	dataMap := d.Get("data").(map[string]interface{})
@@ -97,6 +100,9 @@ func resourceOpenshiftSecretCreate(d *schema.ResourceData, meta interface{}) err
 
 func resourceOpenshiftSecretRead(d *schema.ResourceData, meta interface{}) error {
 	conn, err := kubernetes.NewForConfig(meta.(*rest.Config))
+	if err != nil {
+		return err
+	}
 
 	namespace, name, err := idParts(d.Id())
 	if err != nil {
@@ -133,6 +139,9 @@ func resourceOpenshiftSecretRead(d *schema.ResourceData, meta interface{}) error
 
 func resourceOpenshiftSecretUpdate(d *schema.ResourceData, meta interface{}) error {
 	conn, err := kubernetes.NewForConfig(meta.(*rest.Config))
+	if err != nil {
+		return err
+	}
 
 	namespace, name, err := idParts(d.Id())
 	if err != nil {
@@ -177,6 +186,9 @@ func resourceOpenshiftSecretUpdate(d *schema.ResourceData, meta interface{}) err
 
 func resourceOpenshiftSecretDelete(d *schema.ResourceData, meta interface{}) error {
 	conn, err := kubernetes.NewForConfig(meta.(*rest.Config))
+	if err != nil {
+		return err
+	}
 
 	namespace, name, err := idParts(d.Id())
 	if err != nil {
@@ -198,6 +210,9 @@ func resourceOpenshiftSecretDelete(d *schema.ResourceData, meta interface{}) err
 
 func resourceOpenshiftSecretExists(d *schema.ResourceData, meta interface{}) (bool, error) {
 	conn, err := kubernetes.NewForConfig(meta.(*rest.Config))
+	if err != nil {
+		return false, err
+	}
 
 	namespace, name, err := idParts(d.Id())
 	if err != nil {

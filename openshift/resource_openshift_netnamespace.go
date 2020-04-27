@@ -193,7 +193,7 @@ func resourceOpenshiftNetNamespaceDelete(d *schema.ResourceData, meta interface{
 func resourceOpenshiftNetNamespaceExists(d *schema.ResourceData, meta interface{}) (bool, error) {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return true, err
+		return false, err
 	}
 
 	name := d.Id()
