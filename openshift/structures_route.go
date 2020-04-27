@@ -46,6 +46,26 @@ func flattenTLSConfig(in *v1.TLSConfig) []interface{} {
 		att["termination"] = in.Termination
 	}
 
+	if in.Certificate != "" {
+		att["certificate"] = in.Certificate
+	}
+
+	if in.Key != "" {
+		att["key"] = in.Key
+	}
+
+	if in.CACertificate != "" {
+		att["ca_certificate"] = in.CACertificate
+	}
+
+	if in.DestinationCACertificate != "" {
+		att["destination_ca_certificate"] = in.DestinationCACertificate
+	}
+
+	if in.InsecureEdgeTerminationPolicy != "" {
+		att["insecure_edge_termination_policy"] = in.InsecureEdgeTerminationPolicy
+	}
+
 	return []interface{}{att}
 }
 
@@ -113,6 +133,26 @@ func expandTLSConfig(l []interface{}) *v1.TLSConfig {
 
 	if v, ok := in["termination"].(string); ok {
 		obj.Termination = v1.TLSTerminationType(v)
+	}
+
+	if v, ok := in["certificate"].(string); ok {
+		obj.Certificate = v
+	}
+
+	if v, ok := in["key"].(string); ok {
+		obj.Key = v
+	}
+
+	if v, ok := in["ca_certificate"].(string); ok {
+		obj.CACertificate = v
+	}
+
+	if v, ok := in["destination_ca_certificate"].(string); ok {
+		obj.DestinationCACertificate = v
+	}
+
+	if v, ok := in["insecure_edge_termination_policy"].(string); ok {
+		obj.InsecureEdgeTerminationPolicy = v1.InsecureEdgeTerminationPolicyType(v)
 	}
 
 	return &obj

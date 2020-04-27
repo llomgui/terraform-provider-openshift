@@ -70,10 +70,38 @@ func resourceOpenshiftRoute() *schema.Resource {
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
 									"termination": {
+										Type:         schema.TypeString,
+										Description:  "(string) termination indicates termination type.",
+										Computed:     true,
+										Optional:     true,
+										ValidateFunc: validation.StringInSlice([]string{"edge", "passthrough", "reencrypt"}, false),
+									},
+									"certificate": {
 										Type:        schema.TypeString,
-										Description: "(string) termination indicates termination type.",
-										Computed:    true,
+										Description: "(string) certificate provides certificate contents",
 										Optional:    true,
+									},
+									"key": {
+										Type:        schema.TypeString,
+										Description: "(string) key provides key file contents",
+										Optional:    true,
+									},
+									"ca_certificate": {
+										Type:        schema.TypeString,
+										Description: "(string) caCertificate provides the cert authority certificate contents",
+										Optional:    true,
+									},
+									"destination_ca_certificate": {
+										Type:        schema.TypeString,
+										Description: "(string) destinationCACertificate provides the contents of the ca certificate of the final destination.  When using reencrypt termination this file should be provided in order to have routers use it for health checks on the secure connection. If this field is not specified, the router may provide its own destination CA and perform hostname validation using the short service name (service.namespace.svc), which allows infrastructure generated certificates to automatically verify.",
+										Optional:    true,
+									},
+									"insecure_edge_termination_policy": {
+										Type:         schema.TypeString,
+										Description:  "(string) insecureEdgeTerminationPolicy indicates the desired behavior for insecure connections to a route. While each router may make its own decisions on which ports to expose, this is normally port 80.",
+										Computed:     true,
+										Optional:     true,
+										ValidateFunc: validation.StringInSlice([]string{"None", "Allow", "Redirect"}, false),
 									},
 								},
 							},
