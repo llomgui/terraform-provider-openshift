@@ -35,7 +35,7 @@ func resourceOpenshiftNetNamespace() *schema.Resource {
 		Schema: map[string]*schema.Schema{
 			"metadata": namespacedMetadataSchemaIsTemplate("netnamespace", true, true),
 			"netid": {
-				Type:        schema.TypeInt,
+				Type:        schema.TypeString,
 				Description: "(integer) NetID is the network identifier of the network namespace assigned to each overlay network packet. This can be manipulated with the \"oc adm pod-network\" commands.",
 				Computed:    true,
 			},
