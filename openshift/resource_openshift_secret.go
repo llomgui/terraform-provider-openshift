@@ -30,6 +30,7 @@ func resourceOpenshiftSecret() *schema.Resource {
 			"data": {
 				Type:        schema.TypeMap,
 				Description: "A map of the secret data.",
+				Elem:        &schema.Schema{Type: schema.TypeString},
 				Optional:    true,
 				Sensitive:   true,
 			},
@@ -132,6 +133,7 @@ func resourceOpenshiftSecretRead(d *schema.ResourceData, meta interface{}) error
 		}
 		delete(secretData, key)
 	}
+	//lintignore:XR004
 	d.Set("data", secretData)
 
 	return nil
@@ -149,7 +151,7 @@ func resourceOpenshiftSecretUpdate(d *schema.ResourceData, meta interface{}) err
 	}
 
 	ops := patchMetadata("metadata.0.", "/metadata/", d)
-	if d.HasChange("data") || d.HasChange("base64data") {
+	if d.HasChanges([]string{"data", "base64data"}...) {
 		oldV, newV := d.GetChange("data")
 		oldV = base64EncodeStringMap(oldV.(map[string]interface{}))
 		newV = base64EncodeStringMap(newV.(map[string]interface{}))
