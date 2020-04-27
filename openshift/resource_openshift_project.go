@@ -148,7 +148,7 @@ func resourceOpenshiftProjectDelete(d *schema.ResourceData, meta interface{}) er
 func resourceOpenshiftProjectExists(d *schema.ResourceData, meta interface{}) (bool, error) {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return true, err
+		return false, err
 	}
 
 	name := d.Id()
