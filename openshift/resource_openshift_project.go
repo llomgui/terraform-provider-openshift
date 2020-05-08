@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	pkgApi "k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
@@ -80,7 +81,7 @@ func resourceOpenshiftProjectRead(d *schema.ResourceData, meta interface{}) erro
 }
 
 func resourceOpenshiftProjectUpdate(d *schema.ResourceData, meta interface{}) error {
-	client, err := client_v1.NewForConfig(meta.(*rest.Config))
+	client, err := kubernetes.NewForConfig(meta.(*rest.Config))
 	if err != nil {
 		return err
 	}
@@ -92,7 +93,7 @@ func resourceOpenshiftProjectUpdate(d *schema.ResourceData, meta interface{}) er
 	}
 
 	log.Printf("[INFO] Updating project: %s", ops)
-	out, err := client.Projects().Patch(d.Id(), pkgApi.JSONPatchType, metadata)
+	out, err := client.CoreV1().Namespaces().Patch(d.Id(), pkgApi.JSONPatchType, metadata)
 	if err != nil {
 		return err
 	}
