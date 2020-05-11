@@ -135,6 +135,7 @@ func Provider() terraform.ResourceProvider {
 			"openshift_deployment_config": resourceOpenshiftDeploymentConfig(),
 			"openshift_image_stream":      resourceOpenshiftImageStream(),
 			"openshift_project":           resourceOpenshiftProject(),
+			"openshift_project_request":   resourceOpenshiftProjectRequest(),
 			"openshift_route":             resourceOpenshiftRoute(),
 			"openshift_netnamespace":      resourceOpenshiftNetNamespace(),
 			"openshift_build_config":      resourceOpenshiftBuildConfig(),
