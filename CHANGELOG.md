@@ -1,3 +1,14 @@
+## 1.1.0 (Unreleased)
+
+FEATURES:
+
+* **New Resource:** `openshift_project_request` ([#17](https://github.com/llomgui/terraform-provider-openshift/pull/17))
+
+IMPROVEMENTS:
+
+* Publish releases to Terraform registry ([#20](https://github.com/llomgui/terraform-provider-openshift/pull/20))
+
+
 ## 1.0.0 (April 27, 2020)
 
 FEATURES:
