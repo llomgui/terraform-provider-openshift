@@ -175,6 +175,10 @@ func flattenBuildConfigStrategy(in api.BuildStrategy) ([]interface{}, error) {
 		att["type"] = in.Type
 	}
 
+	if in.SourceStrategy != nil {
+		att["source_strategy"] = flattenBuildConfigSourceStrategy(*in.SourceStrategy)
+	}
+
 	if in.DockerStrategy != nil {
 		att["docker_strategy"] = flattenBuildConfigDockerStrategy(*in.DockerStrategy)
 	}
@@ -209,6 +213,18 @@ func flattenBuildConfigJenkinsPipelineStrategy(in api.JenkinsPipelineBuildStrate
 
 	if in.Jenkinsfile != "" {
 		att["jenkinsfile"] = in.Jenkinsfile
+	}
+
+	return []interface{}{att}
+}
+
+func flattenBuildConfigSourceStrategy(in api.SourceBuildStrategy) []interface{} {
+	att := make(map[string]interface{})
+
+	att["from"] = flattenObjectReference(in.From)
+
+	if in.PullSecret != nil {
+		att["pull_secret"] = flattenLocalObjectReference(in.PullSecret)
 	}
 
 	return []interface{}{att}
@@ -487,9 +503,9 @@ func expandBuildConfigStrategy(l []interface{}) api.BuildStrategy {
 		obj.DockerStrategy = expandBuildConfigStrategyDockerBuildStrategy(v)
 	}
 
-	//	if v, ok := in["source_strategy"].([]interface{}); ok && len(v) > 0 {
-	//		obj.SourceStrategy = expandBuildConfigStrategySourceStrategy(v)
-	//	}
+	if v, ok := in["source_strategy"].([]interface{}); ok && len(v) > 0 {
+		obj.SourceStrategy = expandBuildConfigStrategySourceStrategy(v)
+	}
 
 	if v, ok := in["jenkins_pipeline_strategy"].([]interface{}); ok && len(v) > 0 {
 		obj.JenkinsPipelineStrategy = expandBuildConfigStrategyJenkinsPipelineStrategy(v)
@@ -521,9 +537,24 @@ func expandBuildConfigStrategyDockerBuildStrategy(l []interface{}) *api.DockerBu
 	return obj
 }
 
-//func expandBuildConfigStrategySourceStrategy() {
-//
-//}
+func expandBuildConfigStrategySourceStrategy(l []interface{}) *api.SourceBuildStrategy {
+	obj := &api.SourceBuildStrategy{}
+	if len(l) == 0 || l[0] == nil {
+		return obj
+	}
+
+	in := l[0].(map[string]interface{})
+
+	if v, ok := in["from"].([]interface{}); ok && len(v) > 0 {
+		obj.From = expandBuildConfigImageDefinition(v)
+	}
+
+	if v, ok := in["pull_secret"].([]interface{}); ok && len(v) > 0 {
+		obj.PullSecret = expandBuildConfigSecret(v)
+	}
+
+	return obj
+}
 
 func expandBuildConfigStrategyJenkinsPipelineStrategy(l []interface{}) *api.JenkinsPipelineBuildStrategy {
 	obj := &api.JenkinsPipelineBuildStrategy{}
