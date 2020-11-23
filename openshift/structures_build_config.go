@@ -155,6 +155,14 @@ func flattenBuildConfigSource(in api.BuildSource) ([]interface{}, error) {
 		att["dockerfile"] = *in.Dockerfile
 	}
 
+	if in.Git != nil {
+		att["git"] = flattenBuildConfigGit(*in.Git)
+	}
+
+	if in.SourceSecret != nil {
+		att["source_secret"] = flattenLocalObjectReference(in.SourceSecret)
+	}
+
 	return []interface{}{att}, nil
 }
 
@@ -163,6 +171,20 @@ func flattenBuildConfigBinary(in api.BinaryBuildSource) []interface{} {
 
 	if in.AsFile != "" {
 		att["as_file"] = in.AsFile
+	}
+
+	return []interface{}{att}
+}
+
+func flattenBuildConfigGit(in api.GitBuildSource) []interface{} {
+	att := make(map[string]interface{})
+
+	if in.URI != "" {
+		att["uri"] = in.URI
+	}
+
+	if in.Ref != "" {
+		att["ref"] = in.Ref
 	}
 
 	return []interface{}{att}
