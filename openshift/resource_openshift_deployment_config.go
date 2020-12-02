@@ -1,14 +1,16 @@
 package openshift
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"regexp"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	api "github.com/openshift/api/apps/v1"
 	client_v1 "github.com/openshift/client-go/apps/clientset/versioned/typed/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -24,13 +26,12 @@ const (
 
 func resourceOpenshiftDeploymentConfig() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceOpenshiftDeploymentConfigCreate,
-		Read:   resourceOpenshiftDeploymentConfigRead,
-		Update: resourceOpenshiftDeploymentConfigUpdate,
-		Delete: resourceOpenshiftDeploymentConfigDelete,
-		Exists: resourceOpenshiftDeploymentConfigExists,
+		CreateContext: resourceOpenshiftDeploymentConfigCreate,
+		ReadContext:   resourceOpenshiftDeploymentConfigRead,
+		UpdateContext: resourceOpenshiftDeploymentConfigUpdate,
+		DeleteContext: resourceOpenshiftDeploymentConfigDelete,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 
 		Timeouts: &schema.ResourceTimeout{
@@ -242,20 +243,26 @@ func resourceOpenshiftDeploymentConfig() *schema.Resource {
 					},
 				},
 			},
+			"wait_for_rollout": {
+				Type:        schema.TypeBool,
+				Description: "Wait for the rollout of the deployment to complete. Defaults to true.",
+				Default:     true,
+				Optional:    true,
+			},
 		},
 	}
 }
 
-func resourceOpenshiftDeploymentConfigCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenshiftDeploymentConfigCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	metadata := expandMetadata(d.Get("metadata").([]interface{}))
 	spec, err := expandDeploymentConfigSpec(d.Get("spec").([]interface{}))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	deploymentConfig := api.DeploymentConfig{
@@ -264,72 +271,82 @@ func resourceOpenshiftDeploymentConfigCreate(d *schema.ResourceData, meta interf
 	}
 
 	log.Printf("[INFO] Creating new deploymentconfig: %#v", deploymentConfig)
-	out, err := client.DeploymentConfigs(metadata.Namespace).Create(&deploymentConfig)
+	out, err := client.DeploymentConfigs(metadata.Namespace).Create(ctx, &deploymentConfig, meta_v1.CreateOptions{})
 	if err != nil {
-		return fmt.Errorf("Failed to create deploymentconfig: %s", err)
+		return diag.Errorf("Failed to create deploymentconfig: %s", err)
 	}
 
 	d.SetId(buildId(out.ObjectMeta))
 
 	log.Printf("[DEBUG] Waiting for deploymentconfig %s to schedule %d replicas", d.Id(), out.Spec.Replicas)
 
-	err = resource.Retry(d.Timeout(schema.TimeoutCreate),
-		waitForDeploymentReplicasFunc(client, out.GetNamespace(), out.GetName()))
-	if err != nil {
-		return err
+	if d.Get("wait_for_rollout").(bool) {
+		log.Printf("[INFO] Waiting for deployment %s/%s to rollout", out.ObjectMeta.Namespace, out.ObjectMeta.Name)
+		err := resource.RetryContext(ctx, d.Timeout(schema.TimeoutCreate),
+			waitForDeploymentReplicasFunc(ctx, client, out.GetNamespace(), out.GetName()))
+		if err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	log.Printf("[INFO] Submitted new deploymentconfig: %#v", out)
 
-	return resourceOpenshiftDeploymentConfigRead(d, meta)
+	return resourceOpenshiftDeploymentConfigRead(ctx, d, meta)
 }
 
-func resourceOpenshiftDeploymentConfigRead(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenshiftDeploymentConfigRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	exists, err := resourceOpenshiftDeploymentConfigExists(ctx, d, meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	if !exists {
+		return diag.Diagnostics{}
+	}
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	namespace, name, err := idParts(d.Id())
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	log.Printf("[INFO] Reading deploymentconfig %s", name)
-	deploymentConfig, err := client.DeploymentConfigs(namespace).Get(name, meta_v1.GetOptions{})
+	deploymentConfig, err := client.DeploymentConfigs(namespace).Get(ctx, name, meta_v1.GetOptions{})
 	if err != nil {
 		log.Printf("[DEBUG] Received error: %#v", err)
-		return err
+		return diag.FromErr(err)
 	}
 	log.Printf("[INFO] Received deploymentconfig: %#v", deploymentConfig)
 
 	err = d.Set("metadata", flattenMetadata(deploymentConfig.ObjectMeta, d))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	spec, err := flattenDeploymentConfigSpec(deploymentConfig.Spec, d)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	err = d.Set("spec", spec)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	return nil
 }
 
-func resourceOpenshiftDeploymentConfigUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenshiftDeploymentConfigUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	namespace, name, err := idParts(d.Id())
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	ops := patchMetadata("metadata.0.", "/metadata/", d)
@@ -337,7 +354,7 @@ func resourceOpenshiftDeploymentConfigUpdate(d *schema.ResourceData, meta interf
 	if d.HasChange("spec") {
 		spec, err := expandDeploymentConfigSpec(d.Get("spec").([]interface{}))
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 
 		ops = append(ops, &ReplaceOperation{
@@ -347,47 +364,68 @@ func resourceOpenshiftDeploymentConfigUpdate(d *schema.ResourceData, meta interf
 	}
 	data, err := ops.MarshalJSON()
 	if err != nil {
-		return fmt.Errorf("Failed to marshal update operations: %s", err)
+		return diag.Errorf("Failed to marshal update operations: %s", err)
 	}
 	log.Printf("[INFO] Updating deploymentconfig %q: %v", name, string(data))
-	out, err := client.DeploymentConfigs(namespace).Patch(name, pkgApi.JSONPatchType, data)
+	out, err := client.DeploymentConfigs(namespace).Patch(ctx, name, pkgApi.JSONPatchType, data, meta_v1.PatchOptions{})
 	if err != nil {
-		return fmt.Errorf("Failed to update deployment: %s", err)
+		return diag.Errorf("Failed to update deployment: %s", err)
 	}
 	log.Printf("[INFO] Submitted updated deploymentconfig: %#v", out)
 
-	err = resource.Retry(d.Timeout(schema.TimeoutUpdate),
-		waitForDeploymentReplicasFunc(client, namespace, name))
-	if err != nil {
-		return err
+	if d.Get("wait_for_rollout").(bool) {
+		log.Printf("[INFO] Waiting for deployment %s/%s to rollout", out.ObjectMeta.Namespace, out.ObjectMeta.Name)
+		err := resource.RetryContext(ctx, d.Timeout(schema.TimeoutCreate),
+			waitForDeploymentReplicasFunc(ctx, client, out.GetNamespace(), out.GetName()))
+		if err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
-	return resourceOpenshiftDeploymentConfigRead(d, meta)
+	return resourceOpenshiftDeploymentConfigRead(ctx, d, meta)
 }
 
-func resourceOpenshiftDeploymentConfigDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenshiftDeploymentConfigDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	namespace, name, err := idParts(d.Id())
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	log.Printf("[INFO] Deleting deploymentconfig: %#v", name)
 
-	err = client.DeploymentConfigs(namespace).Delete(name, &meta_v1.DeleteOptions{})
+	err = client.DeploymentConfigs(namespace).Delete(ctx, name, meta_v1.DeleteOptions{})
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
+
+	err = resource.RetryContext(ctx, d.Timeout(schema.TimeoutDelete), func() *resource.RetryError {
+		_, err := client.DeploymentConfigs(namespace).Get(ctx, name, meta_v1.GetOptions{})
+		if err != nil {
+			if statusErr, ok := err.(*errors.StatusError); ok && statusErr.ErrStatus.Code == 404 {
+				return nil
+			}
+			return resource.NonRetryableError(err)
+		}
+
+		e := fmt.Errorf("Deploymentconfig (%s) still exists", d.Id())
+		return resource.RetryableError(e)
+	})
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	log.Printf("[INFO] Deploymentconfig %s deleted", name)
 
 	d.SetId("")
 	return nil
 }
 
-func resourceOpenshiftDeploymentConfigExists(d *schema.ResourceData, meta interface{}) (bool, error) {
+func resourceOpenshiftDeploymentConfigExists(ctx context.Context, d *schema.ResourceData, meta interface{}) (bool, error) {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
 		return false, err
@@ -399,7 +437,7 @@ func resourceOpenshiftDeploymentConfigExists(d *schema.ResourceData, meta interf
 	}
 
 	log.Printf("[INFO] Checking deploymentconfig %s", name)
-	_, err = client.DeploymentConfigs(namespace).Get(name, meta_v1.GetOptions{})
+	_, err = client.DeploymentConfigs(namespace).Get(ctx, name, meta_v1.GetOptions{})
 	if err != nil {
 		if statusErr, ok := err.(*errors.StatusError); ok && statusErr.ErrStatus.Code == 404 {
 			return false, nil
@@ -419,10 +457,10 @@ func GetDeploymentConfigCondition(status api.DeploymentConfigStatus, condType ap
 	return nil
 }
 
-func waitForDeploymentReplicasFunc(client client_v1.DeploymentConfigsGetter, ns, name string) resource.RetryFunc {
+func waitForDeploymentReplicasFunc(ctx context.Context, client client_v1.DeploymentConfigsGetter, ns, name string) resource.RetryFunc {
 	return func() *resource.RetryError {
 		// Query the deployment to get a status update.
-		dply, err := client.DeploymentConfigs(ns).Get(name, meta_v1.GetOptions{})
+		dply, err := client.DeploymentConfigs(ns).Get(ctx, name, meta_v1.GetOptions{})
 		if err != nil {
 			return resource.NonRetryableError(err)
 		}
@@ -440,6 +478,10 @@ func waitForDeploymentReplicasFunc(client client_v1.DeploymentConfigsGetter, ns,
 
 			if dply.Status.Replicas > dply.Status.UpdatedReplicas {
 				return resource.RetryableError(fmt.Errorf("Waiting for rollout to finish: %d old replicas are pending termination...", dply.Status.Replicas-dply.Status.UpdatedReplicas))
+			}
+
+			if dply.Status.Replicas > dply.Status.ReadyReplicas {
+				return resource.RetryableError(fmt.Errorf("Waiting for rollout to finish: %d replicas wanted; %d replicas Ready", dply.Status.Replicas, dply.Status.ReadyReplicas))
 			}
 
 			if dply.Status.AvailableReplicas < dply.Status.UpdatedReplicas {

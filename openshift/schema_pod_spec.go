@@ -1,8 +1,8 @@
 package openshift
 
 import (
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 func podSpecFields(isUpdatable, isDeprecated, isComputed bool) map[string]*schema.Schema {
@@ -31,6 +31,7 @@ func podSpecFields(isUpdatable, isDeprecated, isComputed bool) map[string]*schem
 		"automount_service_account_token": {
 			Type:        schema.TypeBool,
 			Optional:    true,
+			Default:     true,
 			Description: "AutomountServiceAccountToken indicates whether a service account token should be automatically mounted.",
 		},
 		"container": {
@@ -41,6 +42,23 @@ func podSpecFields(isUpdatable, isDeprecated, isComputed bool) map[string]*schem
 			Deprecated:  deprecatedMessage,
 			Elem: &schema.Resource{
 				Schema: containerFields(isUpdatable, false),
+			},
+		},
+		"readiness_gate": {
+			Type:        schema.TypeList,
+			Optional:    true,
+			Computed:    true,
+			Description: "If specified, all readiness gates will be evaluated for pod readiness. A pod is ready when all its containers are ready AND all conditions specified in the readiness gates have status equal to \"True\" More info: https://git.k8s.io/enhancements/keps/sig-network/0007-pod-ready%2B%2B.md",
+			Deprecated:  deprecatedMessage,
+			Elem: &schema.Resource{
+				Schema: map[string]*schema.Schema{
+					"condition_type": {
+						Type:        schema.TypeString,
+						Required:    true,
+						ForceNew:    !isUpdatable,
+						Description: "refers to a condition in the pod's condition list with matching type.",
+					},
+				},
 			},
 		},
 		"init_container": {
@@ -109,10 +127,19 @@ func podSpecFields(isUpdatable, isDeprecated, isComputed bool) map[string]*schem
 				},
 			},
 		},
+		"enable_service_links": {
+			Type:     schema.TypeBool,
+			Optional: true,
+			// Kubernetes API defaults this to `true`. A non-empty plan is returned when we also set this default.
+			Computed:    true,
+			ForceNew:    !isUpdatable,
+			Default:     nil,
+			Description: "Enables generating environment variables for service discovery. Optional: service links are enabled by default.",
+		},
 		"host_aliases": {
 			Type:        schema.TypeList,
 			Optional:    true,
-			ForceNew:    true,
+			ForceNew:    !isUpdatable,
 			Computed:    isComputed,
 			Description: "List of hosts and IPs that will be injected into the pod's hosts file if specified. Optional: Defaults to empty.",
 			Deprecated:  deprecatedMessage,
@@ -190,10 +217,16 @@ func podSpecFields(isUpdatable, isDeprecated, isComputed bool) map[string]*schem
 		},
 		"node_selector": {
 			Type:        schema.TypeMap,
-			Elem:        &schema.Schema{Type: schema.TypeString},
 			Optional:    true,
 			Computed:    isComputed,
 			Description: "NodeSelector is a selector which must be true for the pod to fit on a node. Selector which must match a node's labels for the pod to be scheduled on that node. More info: http://kubernetes.io/docs/user-guide/node-selection.",
+			Deprecated:  deprecatedMessage,
+		},
+		"priority_class_name": {
+			Type:        schema.TypeString,
+			Optional:    true,
+			Computed:    isComputed,
+			Description: `If specified, indicates the pod's priority. "system-node-critical" and "system-cluster-critical" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default.`,
 			Deprecated:  deprecatedMessage,
 		},
 		"restart_policy": {
@@ -250,6 +283,25 @@ func podSpecFields(isUpdatable, isDeprecated, isComputed bool) map[string]*schem
 							Type: schema.TypeInt,
 						},
 					},
+					"sysctl": {
+						Type:        schema.TypeList,
+						Optional:    true,
+						Description: "holds a list of namespaced sysctls used for the pod.",
+						Elem: &schema.Resource{
+							Schema: map[string]*schema.Schema{
+								"name": {
+									Type:        schema.TypeString,
+									Description: "Name of a property to set.",
+									Required:    true,
+								},
+								"value": {
+									Type:        schema.TypeString,
+									Description: "Value of a property to set.",
+									Required:    true,
+								},
+							},
+						},
+					},
 				},
 			},
 		},
@@ -260,12 +312,12 @@ func podSpecFields(isUpdatable, isDeprecated, isComputed bool) map[string]*schem
 			Description: "ServiceAccountName is the name of the ServiceAccount to use to run this pod. More info: http://releases.k8s.io/HEAD/docs/design/service_accounts.md.",
 			Deprecated:  deprecatedMessage,
 		},
-		//		"share_process_namespace": {
-		//			Type:        schema.TypeBool,
-		//			Optional:    true,
-		//			Default:     false,
-		//			Description: "Share a single process namespace between all of the containers in a pod. When this is set containers will be able to view and signal processes from other containers in the same pod, and the first process in each container will not be assigned PID 1. HostPID and ShareProcessNamespace cannot both be set. Optional: Defaults to false.",
-		//		},
+		"share_process_namespace": {
+			Type:        schema.TypeBool,
+			Optional:    true,
+			Default:     false,
+			Description: "Share a single process namespace between all of the containers in a pod. When this is set containers will be able to view and signal processes from other containers in the same pod, and the first process in each container will not be assigned PID 1. HostPID and ShareProcessNamespace cannot both be set. Optional: Defaults to false.",
+		},
 		"subdomain": {
 			Type:        schema.TypeString,
 			Optional:    true,
@@ -327,7 +379,7 @@ func podSpecFields(isUpdatable, isDeprecated, isComputed bool) map[string]*schem
 			Computed:    true,
 			Description: "List of volumes that can be mounted by containers belonging to the pod. More info: http://kubernetes.io/docs/user-guide/volumes",
 			Deprecated:  deprecatedMessage,
-			Elem:        volumeSchema(),
+			Elem:        volumeSchema(isUpdatable),
 		},
 	}
 
@@ -348,7 +400,7 @@ func podSpecFields(isUpdatable, isDeprecated, isComputed bool) map[string]*schem
 	return s
 }
 
-func volumeSchema() *schema.Resource {
+func volumeSchema(isUpdatable bool) *schema.Resource {
 	v := commonVolumeSources()
 
 	v["config_map"] = &schema.Schema{
@@ -360,7 +412,7 @@ func volumeSchema() *schema.Resource {
 			Schema: map[string]*schema.Schema{
 				"items": {
 					Type:        schema.TypeList,
-					Description: `If unspecified, each key-value pair in the Data field of the referenced ConfigMap will be projected into the volume as a file whose name is the key and content is the value. If specified, the listed keys will be projected into the specified paths, and unlisted keys will not be present. If a key is specified which is not present in the ConfigMap, the volume setup will error. Paths must be relative and may not contain the '..' path or start with '..'.`,
+					Description: `If unspecified, each key-value pair in the Data field of the referenced ConfigMap will be projected into the volume as a file whose name is the key and content is the value. If specified, the listed keys will be projected into the specified paths, and unlisted keys will not be present. If a key is specified which is not present in the ConfigMap, the volume setup will error unless it is marked optional. Paths must be relative and may not contain the '..' path or start with '..'.`,
 					Optional:    true,
 					Elem: &schema.Resource{
 						Schema: map[string]*schema.Schema{
@@ -390,6 +442,11 @@ func volumeSchema() *schema.Resource {
 					Optional:     true,
 					Default:      "0644",
 					ValidateFunc: validateModeBits,
+				},
+				"optional": {
+					Type:        schema.TypeBool,
+					Description: "Optional: Specify whether the ConfigMap or its keys must be defined.",
+					Optional:    true,
 				},
 				"name": {
 					Type:        schema.TypeString,
@@ -490,9 +547,12 @@ func volumeSchema() *schema.Resource {
 											Type:     schema.TypeString,
 											Required: true,
 										},
-										"quantity": {
-											Type:     schema.TypeString,
-											Optional: true,
+										"divisor": {
+											Type:             schema.TypeString,
+											Optional:         true,
+											Default:          "1",
+											ValidateFunc:     validateResourceQuantity,
+											DiffSuppressFunc: suppressEquivalentResourceQuantity,
 										},
 										"resource": {
 											Type:        schema.TypeString,
@@ -521,7 +581,16 @@ func volumeSchema() *schema.Resource {
 					Description:  `What type of storage medium should back this directory. The default is "" which means to use the node's default medium. Must be an empty string (default) or Memory. More info: http://kubernetes.io/docs/user-guide/volumes#emptydir`,
 					Optional:     true,
 					Default:      "",
+					ForceNew:     !isUpdatable,
 					ValidateFunc: validateAttributeValueIsIn([]string{"", "Memory"}),
+				},
+				"size_limit": {
+					Type:             schema.TypeString,
+					Description:      `Total amount of local storage required for this EmptyDir volume.`,
+					Optional:         true,
+					ForceNew:         !isUpdatable,
+					ValidateFunc:     validateResourceQuantity,
+					DiffSuppressFunc: suppressEquivalentResourceQuantity,
 				},
 			},
 		},
@@ -591,7 +660,7 @@ func volumeSchema() *schema.Resource {
 				},
 				"optional": {
 					Type:        schema.TypeBool,
-					Description: "Optional: Specify whether the Secret or it's keys must be defined.",
+					Description: "Optional: Specify whether the Secret or its keys must be defined.",
 					Optional:    true,
 				},
 				"secret_name": {
@@ -606,6 +675,228 @@ func volumeSchema() *schema.Resource {
 		Type:        schema.TypeString,
 		Description: "Volume's name. Must be a DNS_LABEL and unique within the pod. More info: http://kubernetes.io/docs/user-guide/identifiers#names",
 		Optional:    true,
+	}
+
+	v["projected"] = &schema.Schema{
+		Type:        schema.TypeList,
+		Description: "Projected represents a single volume that projects several volume sources into the same directory. More info: https://kubernetes.io/docs/concepts/storage/volumes/#projected",
+		Optional:    true,
+		Elem: &schema.Resource{
+			Schema: map[string]*schema.Schema{
+				"default_mode": {
+					Type:         schema.TypeString,
+					Description:  "Optional: mode bits to use on created files by default. Must be a value between 0 and 0777. Defaults to 0644. Directories within the path are not affected by this setting. This might be in conflict with other options that affect the file mode, like fsGroup, and the result can be other mode bits set.",
+					Optional:     true,
+					Default:      "0644",
+					ValidateFunc: validateModeBits,
+				},
+				"sources": {
+					Type:        schema.TypeList,
+					Description: "Source of the volume to project in the directory.",
+					Required:    true,
+					MinItems:    1,
+					Elem: &schema.Resource{
+						Schema: map[string]*schema.Schema{
+							// identical to SecretVolumeSource but without the default mode and uses a local object reference as name instead of a secret name.
+							"secret": &schema.Schema{
+								Type:        schema.TypeList,
+								Description: "Secret represents a secret that should populate this volume. More info: http://kubernetes.io/docs/user-guide/volumes#secrets",
+								Optional:    true,
+								Elem: &schema.Resource{
+									Schema: map[string]*schema.Schema{
+										"name": {
+											Type:        schema.TypeString,
+											Description: "Name of the secret in the pod's namespace to use. More info: http://kubernetes.io/docs/user-guide/volumes#secrets",
+											Optional:    true,
+										},
+										"items": {
+											Type:        schema.TypeList,
+											Description: "If unspecified, each key-value pair in the Data field of the referenced Secret will be projected into the volume as a file whose name is the key and content is the value. If specified, the listed keys will be projected into the specified paths, and unlisted keys will not be present. If a key is specified which is not present in the Secret, the volume setup will error unless it is marked optional. Paths must be relative and may not contain the '..' path or start with '..'.",
+											Optional:    true,
+											Elem: &schema.Resource{
+												Schema: map[string]*schema.Schema{
+													"key": {
+														Type:        schema.TypeString,
+														Optional:    true,
+														Description: "The key to project.",
+													},
+													"mode": {
+														Type:         schema.TypeString,
+														Optional:     true,
+														Description:  "Optional: mode bits to use on this file, must be a value between 0 and 0777. If not specified, the volume defaultMode will be used. This might be in conflict with other options that affect the file mode, like fsGroup, and the result can be other mode bits set.",
+														ValidateFunc: validateModeBits,
+													},
+													"path": {
+														Type:         schema.TypeString,
+														Optional:     true,
+														ValidateFunc: validateAttributeValueDoesNotContain(".."),
+														Description:  "The relative path of the file to map the key to. May not be an absolute path. May not contain the path element '..'. May not start with the string '..'.",
+													},
+												},
+											},
+										},
+										"optional": {
+											Type:        schema.TypeBool,
+											Description: "Optional: Specify whether the Secret or it's keys must be defined.",
+											Optional:    true,
+										},
+									},
+								},
+							},
+							// identical to ConfigMapVolumeSource but without the default mode and uses a local object reference as name instead of a secret name.
+							"config_map": &schema.Schema{
+								Type:        schema.TypeList,
+								Description: "ConfigMap represents a configMap that should populate this volume",
+								Optional:    true,
+								Elem: &schema.Resource{
+									Schema: map[string]*schema.Schema{
+										"name": {
+											Type:        schema.TypeString,
+											Description: "Name of the referent. More info: http://kubernetes.io/docs/user-guide/identifiers#names",
+											Optional:    true,
+										},
+										"items": {
+											Type:        schema.TypeList,
+											Description: "If unspecified, each key-value pair in the Data field of the referenced ConfigMap will be projected into the volume as a file whose name is the key and content is the value. If specified, the listed keys will be projected into the specified paths, and unlisted keys will not be present. If a key is specified which is not present in the ConfigMap, the volume setup will error. Paths must be relative and may not contain the '..' path or start with '..'.",
+											Optional:    true,
+											Elem: &schema.Resource{
+												Schema: map[string]*schema.Schema{
+													"key": {
+														Type:        schema.TypeString,
+														Optional:    true,
+														Description: "The key to project.",
+													},
+													"mode": {
+														Type:         schema.TypeString,
+														Optional:     true,
+														Description:  "Optional: mode bits to use on this file, must be a value between 0 and 0777. If not specified, the volume defaultMode will be used. This might be in conflict with other options that affect the file mode, like fsGroup, and the result can be other mode bits set.",
+														ValidateFunc: validateModeBits,
+													},
+													"path": {
+														Type:         schema.TypeString,
+														Optional:     true,
+														ValidateFunc: validateAttributeValueDoesNotContain(".."),
+														Description:  "The relative path of the file to map the key to. May not be an absolute path. May not contain the path element '..'. May not start with the string '..'.",
+													},
+												},
+											},
+										},
+										"optional": {
+											Type:        schema.TypeBool,
+											Description: "Optional: Specify whether the ConfigMap or it's keys must be defined.",
+											Optional:    true,
+										},
+									},
+								},
+							},
+							// identical to DownwardAPIVolumeSource but without the default mode.
+							"downward_api": &schema.Schema{
+								Type:        schema.TypeList,
+								Description: "DownwardAPI represents downward API about the pod that should populate this volume",
+								Optional:    true,
+								MaxItems:    1,
+								Elem: &schema.Resource{
+									Schema: map[string]*schema.Schema{
+										"items": {
+											Type:        schema.TypeList,
+											Description: "Represents a volume containing downward API info. Downward API volumes support ownership management and SELinux relabeling.",
+											Optional:    true,
+											Elem: &schema.Resource{
+												Schema: map[string]*schema.Schema{
+													"field_ref": {
+														Type:        schema.TypeList,
+														Optional:    true,
+														MaxItems:    1,
+														Description: "Selects a field of the pod: only annotations, labels, name and namespace are supported.",
+														Elem: &schema.Resource{
+															Schema: map[string]*schema.Schema{
+																"api_version": {
+																	Type:        schema.TypeString,
+																	Optional:    true,
+																	Default:     "v1",
+																	Description: "Version of the schema the FieldPath is written in terms of, defaults to 'v1'.",
+																},
+																"field_path": {
+																	Type:        schema.TypeString,
+																	Optional:    true,
+																	Description: "Path of the field to select in the specified API version",
+																},
+															},
+														},
+													},
+													"mode": {
+														Type:         schema.TypeString,
+														Optional:     true,
+														Description:  "Mode bits to use on this file, must be a value between 0 and 0777. If not specified, the volume defaultMode will be used. This might be in conflict with other options that affect the file mode, like fsGroup, and the result can be other mode bits set.",
+														ValidateFunc: validateModeBits,
+													},
+													"path": {
+														Type:         schema.TypeString,
+														Required:     true,
+														ValidateFunc: validateAttributeValueDoesNotContain(".."),
+														Description:  "Path is the relative path name of the file to be created. Must not be absolute or contain the '..' path. Must be utf-8 encoded. The first item of the relative path must not start with '..'",
+													},
+													"resource_field_ref": {
+														Type:        schema.TypeList,
+														Optional:    true,
+														MaxItems:    1,
+														Description: "Selects a resource of the container: only resources limits and requests (limits.cpu, limits.memory, requests.cpu and requests.memory) are currently supported.",
+														Elem: &schema.Resource{
+															Schema: map[string]*schema.Schema{
+																"container_name": {
+																	Type:     schema.TypeString,
+																	Required: true,
+																},
+																"quantity": {
+																	Type:     schema.TypeString,
+																	Optional: true,
+																},
+																"resource": {
+																	Type:        schema.TypeString,
+																	Required:    true,
+																	Description: "Resource to select",
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+							"service_account_token": &schema.Schema{
+								Type:        schema.TypeList,
+								Description: "A projected service account token volume",
+								Optional:    true,
+								MaxItems:    1,
+								Elem: &schema.Resource{
+									Schema: map[string]*schema.Schema{
+										"audience": {
+											Type:        schema.TypeString,
+											Description: "Audience is the intended audience of the token",
+											Optional:    true,
+										},
+										"expiration_seconds": {
+											Type:         schema.TypeInt,
+											Optional:     true,
+											Default:      3600,
+											Description:  "ExpirationSeconds is the expected duration of validity of the service account token. It defaults to 1 hour and must be at least 10 minutes (600 seconds).",
+											ValidateFunc: validateIntGreaterThan(600),
+										},
+										"path": {
+											Type:        schema.TypeString,
+											Description: "Path specifies a relative path to the mount point of the projected volume.",
+											Required:    true,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 	return &schema.Resource{
 		Schema: v,

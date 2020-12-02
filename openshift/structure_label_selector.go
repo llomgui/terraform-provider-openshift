@@ -1,7 +1,7 @@
 package openshift
 
 import (
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -19,7 +19,7 @@ func flattenLabelSelector(in *metav1.LabelSelector) []interface{} {
 }
 
 func flattenLabelSelectorRequirement(in []metav1.LabelSelectorRequirement) []interface{} {
-	att := make([]interface{}, len(in))
+	att := make([]interface{}, len(in), len(in))
 	for i, n := range in {
 		m := make(map[string]interface{})
 		m["key"] = n.Key
@@ -51,7 +51,7 @@ func expandLabelSelectorRequirement(l []interface{}) []metav1.LabelSelectorRequi
 	if len(l) == 0 || l[0] == nil {
 		return []metav1.LabelSelectorRequirement{}
 	}
-	obj := make([]metav1.LabelSelectorRequirement, len(l))
+	obj := make([]metav1.LabelSelectorRequirement, len(l), len(l))
 	for i, n := range l {
 		in := n.(map[string]interface{})
 		obj[i] = metav1.LabelSelectorRequirement{

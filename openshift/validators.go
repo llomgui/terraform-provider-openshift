@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"k8s.io/apimachinery/pkg/api/resource"
 	apiValidation "k8s.io/apimachinery/pkg/api/validation"
 	utilValidation "k8s.io/apimachinery/pkg/util/validation"
@@ -187,6 +187,16 @@ func validateAttributeValueIsIn(validValues []string) schema.SchemaValidateFunc 
 			errors = append(errors, fmt.Errorf(
 				"%q must contain a value from %#v, got %q",
 				k, validValues, input))
+		}
+		return
+	}
+}
+
+func validateIntGreaterThan(minValue int) func(value interface{}, key string) (ws []string, es []error) {
+	return func(value interface{}, key string) (ws []string, es []error) {
+		v := value.(int)
+		if v < minValue {
+			es = append(es, fmt.Errorf("%s must be greater than or equal to %d", key, minValue))
 		}
 		return
 	}

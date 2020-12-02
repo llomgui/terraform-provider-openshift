@@ -6,8 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 // Flatteners
@@ -32,6 +33,12 @@ func flattenPodSpec(in v1.PodSpec) ([]interface{}, error) {
 	}
 	att["container"] = containers
 
+	gates, err := flattenReadinessGates(in.ReadinessGates)
+	if err != nil {
+		return nil, err
+	}
+	att["readiness_gate"] = gates
+
 	initContainers, err := flattenContainers(in.InitContainers)
 	if err != nil {
 		return nil, err
@@ -45,6 +52,12 @@ func flattenPodSpec(in v1.PodSpec) ([]interface{}, error) {
 			return []interface{}{att}, err
 		}
 		att["dns_config"] = v
+	}
+
+	if in.EnableServiceLinks != nil {
+		att["enable_service_links"] = *in.EnableServiceLinks
+	} else {
+		att["enable_service_links"] = true
 	}
 
 	att["host_aliases"] = flattenHostaliases(in.HostAliases)
@@ -63,6 +76,9 @@ func flattenPodSpec(in v1.PodSpec) ([]interface{}, error) {
 	}
 	if len(in.NodeSelector) > 0 {
 		att["node_selector"] = in.NodeSelector
+	}
+	if in.PriorityClassName != "" {
+		att["priority_class_name"] = in.PriorityClassName
 	}
 	if in.RestartPolicy != "" {
 		att["restart_policy"] = in.RestartPolicy
@@ -162,6 +178,9 @@ func flattenPodSecurityContext(in *v1.PodSecurityContext) []interface{} {
 	if in.SELinuxOptions != nil {
 		att["se_linux_options"] = flattenSeLinuxOptions(in.SELinuxOptions)
 	}
+	if in.Sysctls != nil {
+		att["sysctl"] = flattenSysctls(in.Sysctls)
+	}
 
 	if len(att) > 0 {
 		return []interface{}{att}
@@ -184,6 +203,22 @@ func flattenSeLinuxOptions(in *v1.SELinuxOptions) []interface{} {
 		att["level"] = in.Level
 	}
 	return []interface{}{att}
+}
+
+func flattenSysctls(sysctls []v1.Sysctl) []interface{} {
+	att := []interface{}{}
+	for _, v := range sysctls {
+		obj := map[string]interface{}{}
+
+		if v.Name != "" {
+			obj["name"] = v.Name
+		}
+		if v.Value != "" {
+			obj["value"] = v.Value
+		}
+		att = append(att, obj)
+	}
+	return att
 }
 
 func flattenTolerations(tolerations []v1.Toleration) []interface{} {
@@ -241,6 +276,9 @@ func flattenVolumes(volumes []v1.Volume) ([]interface{}, error) {
 		}
 		if v.Secret != nil {
 			obj["secret"] = flattenSecretVolumeSource(v.Secret)
+		}
+		if v.Projected != nil {
+			obj["projected"] = flattenProjectedVolumeSource(v.Projected)
 		}
 		if v.GCEPersistentDisk != nil {
 			obj["gce_persistent_disk"] = flattenGCEPersistentDiskVolumeSource(v.GCEPersistentDisk)
@@ -378,13 +416,18 @@ func flattenConfigMapVolumeSource(in *v1.ConfigMapVolumeSource) []interface{} {
 		}
 		att["items"] = items
 	}
-
+	if in.Optional != nil {
+		att["optional"] = *in.Optional
+	}
 	return []interface{}{att}
 }
 
 func flattenEmptyDirVolumeSource(in *v1.EmptyDirVolumeSource) []interface{} {
 	att := make(map[string]interface{})
-	att["medium"] = in.Medium
+	att["medium"] = string(in.Medium)
+	if in.SizeLimit != nil {
+		att["size_limit"] = in.SizeLimit.String()
+	}
 	return []interface{}{att}
 }
 
@@ -413,6 +456,113 @@ func flattenSecretVolumeSource(in *v1.SecretVolumeSource) []interface{} {
 		att["optional"] = *in.Optional
 	}
 	return []interface{}{att}
+}
+
+func flattenProjectedVolumeSource(in *v1.ProjectedVolumeSource) []interface{} {
+	att := make(map[string]interface{})
+	if in.DefaultMode != nil {
+		att["default_mode"] = "0" + strconv.FormatInt(int64(*in.DefaultMode), 8)
+	}
+	if len(in.Sources) > 0 {
+		sources := make([]interface{}, 0, len(in.Sources))
+		for _, src := range in.Sources {
+			s := make(map[string]interface{})
+			if src.Secret != nil {
+				s["secret"] = flattenSecretProjection(src.Secret)
+			}
+			if src.ConfigMap != nil {
+				s["config_map"] = flattenConfigMapProjection(src.ConfigMap)
+			}
+			if src.DownwardAPI != nil {
+				s["downward_api"] = flattenDownwardAPIProjection(src.DownwardAPI)
+			}
+			if src.ServiceAccountToken != nil {
+				s["service_account_token"] = flattenServiceAccountTokenProjection(src.ServiceAccountToken)
+			}
+			sources = append(sources, s)
+		}
+		att["sources"] = sources
+	}
+	return []interface{}{att}
+}
+
+func flattenSecretProjection(in *v1.SecretProjection) []interface{} {
+	att := make(map[string]interface{})
+	if in.Name != "" {
+		att["name"] = in.Name
+	}
+	if len(in.Items) > 0 {
+		items := make([]interface{}, len(in.Items))
+		for i, v := range in.Items {
+			m := map[string]interface{}{}
+			m["key"] = v.Key
+			if v.Mode != nil {
+				m["mode"] = "0" + strconv.FormatInt(int64(*v.Mode), 8)
+			}
+			m["path"] = v.Path
+			items[i] = m
+		}
+		att["items"] = items
+	}
+	if in.Optional != nil {
+		att["optional"] = *in.Optional
+	}
+	return []interface{}{att}
+}
+
+func flattenConfigMapProjection(in *v1.ConfigMapProjection) []interface{} {
+	att := make(map[string]interface{})
+	att["name"] = in.Name
+	if len(in.Items) > 0 {
+		items := make([]interface{}, len(in.Items))
+		for i, v := range in.Items {
+			m := map[string]interface{}{}
+			if v.Key != "" {
+				m["key"] = v.Key
+			}
+			if v.Mode != nil {
+				m["mode"] = "0" + strconv.FormatInt(int64(*v.Mode), 8)
+			}
+			if v.Path != "" {
+				m["path"] = v.Path
+			}
+			items[i] = m
+		}
+		att["items"] = items
+	}
+	return []interface{}{att}
+}
+
+func flattenDownwardAPIProjection(in *v1.DownwardAPIProjection) []interface{} {
+	att := make(map[string]interface{})
+	if len(in.Items) > 0 {
+		att["items"] = flattenDownwardAPIVolumeFile(in.Items)
+	}
+	return []interface{}{att}
+}
+
+func flattenServiceAccountTokenProjection(in *v1.ServiceAccountTokenProjection) []interface{} {
+	att := make(map[string]interface{})
+	if in.Audience != "" {
+		att["audience"] = in.Audience
+	}
+	if in.ExpirationSeconds != nil {
+		att["expiration_seconds"] = in.ExpirationSeconds
+	}
+	if in.Path != "" {
+		att["path"] = in.Path
+	}
+	return []interface{}{att}
+}
+
+func flattenReadinessGates(in []v1.PodReadinessGate) ([]interface{}, error) {
+	att := make([]interface{}, len(in))
+	for i, v := range in {
+		c := make(map[string]interface{})
+		c["condition_type"] = v.ConditionType
+		att[i] = c
+	}
+	return att, nil
 }
 
 // Expanders
@@ -448,6 +598,14 @@ func expandPodSpec(p []interface{}) (*v1.PodSpec, error) {
 		obj.Containers = cs
 	}
 
+	if v, ok := in["readiness_gate"].([]interface{}); ok && len(v) > 0 {
+		cs, err := expandReadinessGates(v)
+		if err != nil {
+			return obj, err
+		}
+		obj.ReadinessGates = cs
+	}
+
 	if v, ok := in["init_container"].([]interface{}); ok && len(v) > 0 {
 		cs, err := expandContainers(v)
 		if err != nil {
@@ -466,6 +624,10 @@ func expandPodSpec(p []interface{}) (*v1.PodSpec, error) {
 			return obj, nil
 		}
 		obj.DNSConfig = dnsConfig
+	}
+
+	if v, ok := in["enable_service_links"].(bool); ok {
+		obj.EnableServiceLinks = ptrToBool(v)
 	}
 
 	if v, ok := in["host_aliases"].([]interface{}); ok && len(v) > 0 {
@@ -509,6 +671,10 @@ func expandPodSpec(p []interface{}) (*v1.PodSpec, error) {
 			}
 		}
 		obj.NodeSelector = nodeSelectors
+	}
+
+	if v, ok := in["priority_class_name"].(string); ok {
+		obj.PriorityClassName = v
 	}
 
 	if v, ok := in["restart_policy"].(string); ok {
@@ -621,8 +787,29 @@ func expandPodSecurityContext(l []interface{}) *v1.PodSecurityContext {
 	if v, ok := in["supplemental_groups"].(*schema.Set); ok {
 		obj.SupplementalGroups = schemaSetToInt64Array(v)
 	}
+	if v, ok := in["sysctl"].([]interface{}); ok && len(v) > 0 {
+		obj.Sysctls = expandSysctls(v)
+	}
 
 	return obj
+}
+
+func expandSysctls(l []interface{}) []v1.Sysctl {
+	if len(l) == 0 {
+		return []v1.Sysctl{}
+	}
+	sysctls := make([]v1.Sysctl, len(l))
+	for i, c := range l {
+		p := c.(map[string]interface{})
+		if v, ok := p["name"].(string); ok {
+			sysctls[i].Name = v
+		}
+		if v, ok := p["value"].(string); ok {
+			sysctls[i].Value = v
+		}
+
+	}
+	return sysctls
 }
 
 func expandSeLinuxOptions(l []interface{}) *v1.SELinuxOptions {
@@ -665,6 +852,7 @@ func expandKeyPath(in []interface{}) []v1.KeyToPath {
 		if v, ok := p["path"].(string); ok {
 			keyPaths[i].Path = v
 		}
+
 	}
 	return keyPaths
 }
@@ -677,8 +865,8 @@ func expandDownwardAPIVolumeFile(in []interface{}) ([]v1.DownwardAPIVolumeFile, 
 	dapivf := make([]v1.DownwardAPIVolumeFile, len(in))
 	for i, c := range in {
 		p := c.(map[string]interface{})
-		if v, ok := p["mode"].(string); ok {
-			m, err := strconv.ParseInt(v, 8, 32)
+		if mode, ok := p["mode"].(string); ok && len(mode) > 0 {
+			m, err := strconv.ParseInt(mode, 8, 32)
 			if err != nil {
 				return dapivf, fmt.Errorf("DownwardAPI volume file: failed to parse 'mode' value: %s", err)
 			}
@@ -722,6 +910,9 @@ func expandConfigMapVolumeSource(l []interface{}) (*v1.ConfigMapVolumeSource, er
 		obj.Name = v
 	}
 
+	if opt, ok := in["optional"].(bool); ok {
+		obj.Optional = ptrToBool(opt)
+	}
 	if v, ok := in["items"].([]interface{}); ok && len(v) > 0 {
 		obj.Items = expandKeyPath(v)
 	}
@@ -774,15 +965,24 @@ func expandGitRepoVolumeSource(l []interface{}) *v1.GitRepoVolumeSource {
 	return obj
 }
 
-func expandEmptyDirVolumeSource(l []interface{}) *v1.EmptyDirVolumeSource {
+func expandEmptyDirVolumeSource(l []interface{}) (*v1.EmptyDirVolumeSource, error) {
 	if len(l) == 0 || l[0] == nil {
-		return &v1.EmptyDirVolumeSource{}
+		return &v1.EmptyDirVolumeSource{}, nil
 	}
 	in := l[0].(map[string]interface{})
 	obj := &v1.EmptyDirVolumeSource{
 		Medium: v1.StorageMedium(in["medium"].(string)),
 	}
-	return obj
+
+	if v, ok := in["size_limit"].(string); ok && v != "" {
+		s, err := resource.ParseQuantity(v)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse size_limit: %w", err)
+		}
+		obj.SizeLimit = &s
+	}
+
+	return obj, nil
 }
 
 func expandPersistentVolumeClaimVolumeSource(l []interface{}) *v1.PersistentVolumeClaimVolumeSource {
@@ -824,6 +1024,175 @@ func expandSecretVolumeSource(l []interface{}) (*v1.SecretVolumeSource, error) {
 	}
 
 	return obj, nil
+}
+
+func expandProjectedVolumeSource(l []interface{}) (*v1.ProjectedVolumeSource, error) {
+	obj := &v1.ProjectedVolumeSource{}
+	if len(l) == 0 || l[0] == nil {
+		return obj, nil
+	}
+	in := l[0].(map[string]interface{})
+
+	if mode, ok := in["default_mode"].(string); ok && len(mode) > 0 {
+		v, err := strconv.ParseInt(mode, 8, 32)
+		if err != nil {
+			return obj, fmt.Errorf("Projected volume: failed to parse 'default_mode' value: %s", err)
+		}
+		obj.DefaultMode = ptrToInt32(int32(v))
+	}
+	if v, ok := in["sources"].([]interface{}); ok && len(v) > 0 {
+		srcs, err := expandProjectedSources(v)
+		if err != nil {
+			return obj, fmt.Errorf("Projected volume: failed to parse 'sources' value: %s", err)
+		}
+
+		obj.Sources = srcs
+	}
+
+	return obj, nil
+}
+
+func expandProjectedSources(sources []interface{}) ([]v1.VolumeProjection, error) {
+	if len(sources) == 0 || sources[0] == nil {
+		return []v1.VolumeProjection{}, nil
+	}
+	srcs := make([]v1.VolumeProjection, 0, len(sources))
+	for _, src := range sources {
+		in, ok := src.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if v, ok := in["secret"].([]interface{}); ok {
+			srcs = append(srcs, expandProjectedSecrets(v)...)
+		}
+		if v, ok := in["config_map"].([]interface{}); ok {
+			srcs = append(srcs, expandProjectedConfigMaps(v)...)
+		}
+		if v, ok := in["downward_api"].([]interface{}); ok {
+			values, err := expandProjectedDownwardAPIs(v)
+			if err != nil {
+				return nil, err
+			}
+			srcs = append(srcs, values...)
+		}
+		if v, ok := in["service_account_token"].([]interface{}); ok {
+			values, err := expandProjectedServiceAccountTokens(v)
+			if err != nil {
+				return nil, err
+			}
+			srcs = append(srcs, values...)
+		}
+	}
+
+	return srcs, nil
+}
+
+func expandProjectedSecrets(secrets []interface{}) []v1.VolumeProjection {
+	out := make([]v1.VolumeProjection, 0, len(secrets))
+	for _, in := range secrets {
+		if v, ok := in.(map[string]interface{}); ok {
+			out = append(out, v1.VolumeProjection{Secret: expandProjectedSecret(v)})
+		}
+	}
+	return out
+}
+
+func expandProjectedSecret(secret map[string]interface{}) *v1.SecretProjection {
+	s := &v1.SecretProjection{}
+	if value, ok := secret["name"].(string); ok {
+		s.Name = value
+	}
+	if values, ok := secret["items"].([]interface{}); ok {
+		s.Items = expandKeyPath(values)
+	}
+	if value, ok := secret["optional"].(bool); ok {
+		s.Optional = ptrToBool(value)
+	}
+	return s
+}
+
+func expandProjectedConfigMaps(configMaps []interface{}) []v1.VolumeProjection {
+	out := make([]v1.VolumeProjection, 0, len(configMaps))
+	for _, in := range configMaps {
+		if v, ok := in.(map[string]interface{}); ok {
+			var vol v1.VolumeProjection
+			vol.ConfigMap = expandProjectedConfigMap(v)
+			out = append(out, vol)
+		}
+	}
+	return out
+}
+
+func expandProjectedConfigMap(configMap map[string]interface{}) *v1.ConfigMapProjection {
+	s := &v1.ConfigMapProjection{}
+	if value, ok := configMap["name"].(string); ok {
+		s.Name = value
+	}
+	if values, ok := configMap["items"].([]interface{}); ok {
+		s.Items = expandKeyPath(values)
+	}
+	if value, ok := configMap["optional"].(bool); ok {
+		s.Optional = ptrToBool(value)
+	}
+	return s
+}
+
+func expandProjectedDownwardAPIs(downwardAPIs []interface{}) ([]v1.VolumeProjection, error) {
+	out := make([]v1.VolumeProjection, 0, len(downwardAPIs))
+	for i, in := range downwardAPIs {
+		if v, ok := in.(map[string]interface{}); ok {
+			downwardAPI, err := expandProjectedDownwardAPI(v)
+			if err != nil {
+				return nil, fmt.Errorf("expanding downward API #%d: %v", i+1, err)
+			}
+			out = append(out, v1.VolumeProjection{
+				DownwardAPI: downwardAPI,
+			})
+		}
+	}
+	return out, nil
+}
+
+func expandProjectedDownwardAPI(downwardAPI map[string]interface{}) (*v1.DownwardAPIProjection, error) {
+	s := &v1.DownwardAPIProjection{}
+	if values, ok := downwardAPI["items"].([]interface{}); ok {
+		v, err := expandDownwardAPIVolumeFile(values)
+		if err != nil {
+			return nil, err
+		}
+		s.Items = v
+	}
+	return s, nil
+}
+
+func expandProjectedServiceAccountTokens(sats []interface{}) ([]v1.VolumeProjection, error) {
+	out := make([]v1.VolumeProjection, 0, len(sats))
+	for i, in := range sats {
+		if v, ok := in.(map[string]interface{}); ok {
+			sat, err := expandProjectedServiceAccountToken(v)
+			if err != nil {
+				return nil, fmt.Errorf("expanding service account token #%d: %v", i+1, err)
+			}
+			out = append(out, v1.VolumeProjection{
+				ServiceAccountToken: sat,
+			})
+		}
+	}
+	return out, nil
+}
+
+func expandProjectedServiceAccountToken(sat map[string]interface{}) (*v1.ServiceAccountTokenProjection, error) {
+	s := &v1.ServiceAccountTokenProjection{}
+	if value, ok := sat["audience"].(string); ok {
+		s.Audience = value
+	}
+	if value, ok := sat["expiration_seconds"].(int); ok {
+		s.ExpirationSeconds = ptrToInt64(int64(value))
+	}
+	if value, ok := sat["path"].(string); ok {
+		s.Path = value
+	}
+	return s, nil
 }
 
 func expandTolerations(tolerations []interface{}) ([]*v1.Toleration, error) {
@@ -882,7 +1251,11 @@ func expandVolumes(volumes []interface{}) ([]v1.Volume, error) {
 		}
 
 		if value, ok := m["empty_dir"].([]interface{}); ok && len(value) > 0 {
-			vl[i].EmptyDir = expandEmptyDirVolumeSource(value)
+			var err error
+			vl[i].EmptyDir, err = expandEmptyDirVolumeSource(value)
+			if err != nil {
+				return vl, err
+			}
 		}
 		if value, ok := m["downward_api"].([]interface{}); ok && len(value) > 0 {
 			var err error
@@ -901,6 +1274,13 @@ func expandVolumes(volumes []interface{}) ([]v1.Volume, error) {
 				return vl, err
 			}
 			vl[i].Secret = sc
+		}
+		if value, ok := m["projected"].([]interface{}); ok && len(value) > 0 {
+			pj, err := expandProjectedVolumeSource(value)
+			if err != nil {
+				return vl, err
+			}
+			vl[i].Projected = pj
 		}
 		if v, ok := m["gce_persistent_disk"].([]interface{}); ok && len(v) > 0 {
 			vl[i].GCEPersistentDisk = expandGCEPersistentDiskVolumeSource(v)
@@ -955,4 +1335,47 @@ func expandVolumes(volumes []interface{}) ([]v1.Volume, error) {
 		}
 	}
 	return vl, nil
+}
+
+func expandReadinessGates(gates []interface{}) ([]v1.PodReadinessGate, error) {
+	if len(gates) == 0 || gates[0] == nil {
+		return []v1.PodReadinessGate{}, nil
+	}
+	cs := make([]v1.PodReadinessGate, len(gates))
+	for i, c := range gates {
+		gate := c.(map[string]interface{})
+
+		if v, ok := gate["condition_type"]; ok {
+			conType := v1.PodConditionType(v.(string))
+			cs[i].ConditionType = conType
+		}
+	}
+	return cs, nil
+}
+
+func patchPodSpec(pathPrefix, prefix string, d *schema.ResourceData) (PatchOperations, error) {
+	ops := make([]PatchOperation, 0)
+
+	if d.HasChange(prefix + "active_deadline_seconds") {
+		v := d.Get(prefix + "active_deadline_seconds").(int)
+		ops = append(ops, &ReplaceOperation{
+			Path:  pathPrefix + "/activeDeadlineSeconds",
+			Value: v,
+		})
+	}
+
+	if d.HasChange(prefix + "container") {
+		containers := d.Get(prefix + "container").([]interface{})
+		value, _ := expandContainers(containers)
+
+		for i, v := range value {
+			ops = append(ops, &ReplaceOperation{
+				Path:  pathPrefix + "/containers/" + strconv.Itoa(i) + "/image",
+				Value: v.Image,
+			})
+
+		}
+
+	}
+	return ops, nil
 }

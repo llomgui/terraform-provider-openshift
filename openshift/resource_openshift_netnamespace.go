@@ -1,12 +1,13 @@
 package openshift
 
 import (
-	"fmt"
+	"context"
 	"log"
 	"strconv"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	api "github.com/openshift/api/network/v1"
 	client_v1 "github.com/openshift/client-go/network/clientset/versioned/typed/network/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -17,13 +18,12 @@ import (
 
 func resourceOpenshiftNetNamespace() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceOpenshiftNetNamespaceCreate,
-		Read:   resourceOpenshiftNetNamespaceRead,
-		Update: resourceOpenshiftNetNamespaceUpdate,
-		Delete: resourceOpenshiftNetNamespaceDelete,
-		Exists: resourceOpenshiftNetNamespaceExists,
+		CreateContext: resourceOpenshiftNetNamespaceCreate,
+		ReadContext:   resourceOpenshiftNetNamespaceRead,
+		UpdateContext: resourceOpenshiftNetNamespaceUpdate,
+		DeleteContext: resourceOpenshiftNetNamespaceDelete,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 
 		Timeouts: &schema.ResourceTimeout{
@@ -45,20 +45,19 @@ func resourceOpenshiftNetNamespace() *schema.Resource {
 				Required:    true,
 			},
 			"egress_ips": {
-				Type:        schema.TypeSet,
+				Type:        schema.TypeList,
 				Description: "EgressIPs is a list of reserved IPs that will be used as the source for external traffic coming from pods in this namespace. (If empty, external traffic will be masqueraded to Node IPs.)",
 				Optional:    true,
 				Elem:        &schema.Schema{Type: schema.TypeString},
-				Set:         schema.HashString,
 			},
 		},
 	}
 }
 
-func resourceOpenshiftNetNamespaceCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenshiftNetNamespaceCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	netNamespace := api.NetNamespace{}
@@ -68,64 +67,71 @@ func resourceOpenshiftNetNamespaceCreate(d *schema.ResourceData, meta interface{
 	netNamespace.NetName = d.Get("netname").(string)
 
 	if v, ok := d.GetOk("egress_ips"); ok && v.(*schema.Set).Len() > 0 {
-		netNamespace.EgressIPs = sliceOfString(v.(*schema.Set).List())
+		netNamespace.EgressIPs = make([]api.NetNamespaceEgressIP, len(v.(*schema.Set).List()))
 	}
 
 	log.Printf("[INFO] Creating new netnamespace: %#v", netNamespace)
-	out, err := client.NetNamespaces().Create(&netNamespace)
+	out, err := client.NetNamespaces().Create(ctx, &netNamespace, meta_v1.CreateOptions{})
 	if err != nil {
-		return fmt.Errorf("Failed to create netnamespace: %s", err)
+		return diag.Errorf("Failed to create netnamespace: %s", err)
 	}
 	log.Printf("[INFO] Submitted new netnamespace: %#v", out)
 	d.SetId(out.NetName)
 
-	return resourceOpenshiftNetNamespaceRead(d, meta)
+	return resourceOpenshiftNetNamespaceRead(ctx, d, meta)
 }
 
-func resourceOpenshiftNetNamespaceRead(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenshiftNetNamespaceRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	exists, err := resourceOpenshiftNetNamespaceExists(ctx, d, meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	if !exists {
+		return diag.Diagnostics{}
+	}
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	name := d.Id()
 
 	log.Printf("[INFO] Reading netnamespace %s", name)
-	netNamespace, err := client.NetNamespaces().Get(name, meta_v1.GetOptions{})
+	netNamespace, err := client.NetNamespaces().Get(ctx, name, meta_v1.GetOptions{})
 	if err != nil {
 		log.Printf("[DEBUG] Received error: %#v", err)
-		return err
+		return diag.FromErr(err)
 	}
 	log.Printf("[INFO] Received netnamespace: %#v", netNamespace)
 
 	err = d.Set("metadata", flattenMetadata(netNamespace.ObjectMeta, d))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	err = d.Set("netname", netNamespace.NetName)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	err = d.Set("netid", strconv.FormatUint(uint64(netNamespace.NetID), 10))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	if len(netNamespace.EgressIPs) > 0 {
-		if err := d.Set("egress_ips", newStringSet(schema.HashString, netNamespace.EgressIPs)); err != nil {
-			return fmt.Errorf("error setting egress_ips: %s", err)
+		if err := d.Set("egress_ips", netNamespace.EgressIPs); err != nil {
+			return diag.Errorf("error setting egress_ips: %s", err)
 		}
 	}
 
 	return nil
 }
 
-func resourceOpenshiftNetNamespaceUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenshiftNetNamespaceUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	name := d.Id()
@@ -156,41 +162,41 @@ func resourceOpenshiftNetNamespaceUpdate(d *schema.ResourceData, meta interface{
 
 	data, err := ops.MarshalJSON()
 	if err != nil {
-		return fmt.Errorf("Failed to marshal update operations: %s", err)
+		return diag.Errorf("Failed to marshal update operations: %s", err)
 	}
 
 	log.Printf("[INFO] Updating netnamespace %q: %v", name, string(data))
-	out, err := client.NetNamespaces().Patch(name, pkgApi.JSONPatchType, data)
+	out, err := client.NetNamespaces().Patch(ctx, name, pkgApi.JSONPatchType, data, meta_v1.PatchOptions{})
 	if err != nil {
-		return fmt.Errorf("Failed to update netnamespace: %s", err)
+		return diag.Errorf("Failed to update netnamespace: %s", err)
 	}
 	log.Printf("[INFO] Submitted updated netnamespace: %#v", out)
 
 	d.SetId(out.NetName)
 
-	return resourceOpenshiftNetNamespaceRead(d, meta)
+	return resourceOpenshiftNetNamespaceRead(ctx, d, meta)
 }
 
-func resourceOpenshiftNetNamespaceDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenshiftNetNamespaceDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	name := d.Id()
 
 	log.Printf("[INFO] Deleting netnamespace: %#v", name)
 
-	err = client.NetNamespaces().Delete(name, &meta_v1.DeleteOptions{})
+	err = client.NetNamespaces().Delete(ctx, name, meta_v1.DeleteOptions{})
 	if err != nil {
-		return fmt.Errorf("Failed to delete netnamespace: %s", err)
+		return diag.Errorf("Failed to delete netnamespace: %s", err)
 	}
 
 	d.SetId("")
 	return nil
 }
 
-func resourceOpenshiftNetNamespaceExists(d *schema.ResourceData, meta interface{}) (bool, error) {
+func resourceOpenshiftNetNamespaceExists(ctx context.Context, d *schema.ResourceData, meta interface{}) (bool, error) {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
 		return false, err
@@ -199,7 +205,7 @@ func resourceOpenshiftNetNamespaceExists(d *schema.ResourceData, meta interface{
 	name := d.Id()
 
 	log.Printf("[INFO] Checking netnamespace %s", name)
-	_, err = client.NetNamespaces().Get(name, meta_v1.GetOptions{})
+	_, err = client.NetNamespaces().Get(ctx, name, meta_v1.GetOptions{})
 	if err != nil {
 		if statusErr, ok := err.(*errors.StatusError); ok && statusErr.ErrStatus.Code == 404 {
 			return false, nil

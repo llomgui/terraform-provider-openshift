@@ -1,6 +1,6 @@
 package openshift
 
-import v1 "k8s.io/api/core/v1"
+import "k8s.io/api/core/v1"
 
 func flattenHostaliases(in []v1.HostAlias) []interface{} {
 	att := make([]interface{}, len(in))

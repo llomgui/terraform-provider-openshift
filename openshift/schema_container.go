@@ -1,6 +1,9 @@
 package openshift
 
-import "github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+import (
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+)
 
 func handlerFields() map[string]*schema.Schema {
 	return map[string]*schema.Schema{
@@ -92,53 +95,24 @@ func handlerFields() map[string]*schema.Schema {
 func resourcesField() map[string]*schema.Schema {
 	return map[string]*schema.Schema{
 		"limits": {
-			Type:        schema.TypeList,
+			Type:        schema.TypeMap,
 			Optional:    true,
 			Computed:    true,
-			MaxItems:    1,
 			Description: "Describes the maximum amount of compute resources allowed. More info: http://kubernetes.io/docs/user-guide/compute-resources/",
-			Elem: &schema.Resource{
-				Schema: map[string]*schema.Schema{
-					"cpu": {
-						Type:             schema.TypeString,
-						Optional:         true,
-						Computed:         true,
-						ValidateFunc:     validateResourceQuantity,
-						DiffSuppressFunc: suppressEquivalentResourceQuantity,
-					},
-					"memory": {
-						Type:             schema.TypeString,
-						Optional:         true,
-						Computed:         true,
-						ValidateFunc:     validateResourceQuantity,
-						DiffSuppressFunc: suppressEquivalentResourceQuantity,
-					},
-				},
+			Elem: &schema.Schema{
+				Type: schema.TypeString,
 			},
+			DiffSuppressFunc: suppressEquivalentResourceQuantity,
 		},
 		"requests": {
-			Type:     schema.TypeList,
-			Optional: true,
-			Computed: true,
-			MaxItems: 1,
-			Elem: &schema.Resource{
-				Schema: map[string]*schema.Schema{
-					"cpu": {
-						Type:             schema.TypeString,
-						Optional:         true,
-						Computed:         true,
-						ValidateFunc:     validateResourceQuantity,
-						DiffSuppressFunc: suppressEquivalentResourceQuantity,
-					},
-					"memory": {
-						Type:             schema.TypeString,
-						Optional:         true,
-						Computed:         true,
-						ValidateFunc:     validateResourceQuantity,
-						DiffSuppressFunc: suppressEquivalentResourceQuantity,
-					},
-				},
+			Type:        schema.TypeMap,
+			Optional:    true,
+			Computed:    true,
+			Description: "Requests describes the minimum amount of compute resources required. If Requests is omitted for a container, it defaults to Limits if that is explicitly specified, otherwise to an implementation-defined value. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/",
+			Elem: &schema.Schema{
+				Type: schema.TypeString,
 			},
+			DiffSuppressFunc: suppressEquivalentResourceQuantity,
 		},
 	}
 }
@@ -191,20 +165,31 @@ func volumeMountFields() map[string]*schema.Schema {
 			Optional:    true,
 			Description: `Path within the volume from which the container's volume should be mounted. Defaults to "" (volume's root).`,
 		},
+		"mount_propagation": {
+			Type:         schema.TypeString,
+			Description:  "Mount propagation mode. mount_propagation determines how mounts are propagated from the host to container and the other way around. Valid values are None (default), HostToContainer and Bidirectional.",
+			Optional:     true,
+			Default:      "None",
+			ValidateFunc: validation.StringInSlice([]string{"None", "HostToContainer", "Bidirectional"}, false),
+		},
 	}
 }
 
 func containerFields(isUpdatable, isInitContainer bool) map[string]*schema.Schema {
 	s := map[string]*schema.Schema{
 		"args": {
-			Type:        schema.TypeList,
-			Optional:    true,
+			Type:     schema.TypeList,
+			Optional: true,
+			// The API will default this to [], so prevent non-empty plans by setting this to Computed.
+			Computed:    true,
 			Elem:        &schema.Schema{Type: schema.TypeString},
 			Description: "Arguments to the entrypoint. The docker image's CMD is used if this is not provided. Variable references $(VAR_NAME) are expanded using the container's environment. If a variable cannot be resolved, the reference in the input string will be unchanged. The $(VAR_NAME) syntax can be escaped with a double $$, ie: $$(VAR_NAME). Escaped references will never be expanded, regardless of whether the variable exists or not. Cannot be updated. More info: http://kubernetes.io/docs/user-guide/containers#containers-and-commands",
 		},
 		"command": {
-			Type:        schema.TypeList,
-			Optional:    true,
+			Type:     schema.TypeList,
+			Optional: true,
+			// The API will default this to [], so prevent non-empty plans by setting this to Computed.
+			Computed:    true,
 			Elem:        &schema.Schema{Type: schema.TypeString},
 			Description: "Entrypoint array. Not executed within a shell. The docker image's ENTRYPOINT is used if this is not provided. Variable references $(VAR_NAME) are expanded using the container's environment. If a variable cannot be resolved, the reference in the input string will be unchanged. The $(VAR_NAME) syntax can be escaped with a double $$, ie: $$(VAR_NAME). Escaped references will never be expanded, regardless of whether the variable exists or not. Cannot be updated. More info: http://kubernetes.io/docs/user-guide/containers#containers-and-commands",
 		},
@@ -249,6 +234,11 @@ func containerFields(isUpdatable, isInitContainer bool) map[string]*schema.Schem
 												Optional:    true,
 												Description: "Name of the referent. More info: http://kubernetes.io/docs/user-guide/identifiers#names",
 											},
+											"optional": {
+												Type:        schema.TypeBool,
+												Optional:    true,
+												Description: "Specify whether the ConfigMap or its key must be defined.",
+											},
 										},
 									},
 								},
@@ -256,7 +246,7 @@ func containerFields(isUpdatable, isInitContainer bool) map[string]*schema.Schem
 									Type:        schema.TypeList,
 									Optional:    true,
 									MaxItems:    1,
-									Description: "Selects a field of the pod: supports metadata.name, metadata.namespace, metadata.labels, metadata.annotations, spec.nodeName, spec.serviceAccountName, status.podIP..",
+									Description: "Selects a field of the pod: supports metadata.name, metadata.namespace, metadata.labels, metadata.annotations, spec.nodeName, spec.serviceAccountName, status.podIP.",
 									Elem: &schema.Resource{
 										Schema: map[string]*schema.Schema{
 											"api_version": {
@@ -277,12 +267,19 @@ func containerFields(isUpdatable, isInitContainer bool) map[string]*schema.Schem
 									Type:        schema.TypeList,
 									Optional:    true,
 									MaxItems:    1,
-									Description: "Selects a field of the pod: supports metadata.name, metadata.namespace, metadata.labels, metadata.annotations, spec.nodeName, spec.serviceAccountName, status.podIP..",
+									Description: "Selects a resource of the container: only resources limits and requests (limits.cpu, limits.memory, limits.ephemeral-storage, requests.cpu, requests.memory and requests.ephemeral-storage) are currently supported.",
 									Elem: &schema.Resource{
 										Schema: map[string]*schema.Schema{
 											"container_name": {
 												Type:     schema.TypeString,
 												Optional: true,
+											},
+											"divisor": {
+												Type:             schema.TypeString,
+												Optional:         true,
+												Default:          "1",
+												ValidateFunc:     validateResourceQuantity,
+												DiffSuppressFunc: suppressEquivalentResourceQuantity,
 											},
 											"resource": {
 												Type:        schema.TypeString,
@@ -296,7 +293,7 @@ func containerFields(isUpdatable, isInitContainer bool) map[string]*schema.Schem
 									Type:        schema.TypeList,
 									Optional:    true,
 									MaxItems:    1,
-									Description: "Selects a field of the pod: supports metadata.name, metadata.namespace, metadata.labels, metadata.annotations, spec.nodeName, spec.serviceAccountName, status.podIP..",
+									Description: "Selects a key of a secret in the pod's namespace.",
 									Elem: &schema.Resource{
 										Schema: map[string]*schema.Schema{
 											"key": {
@@ -308,6 +305,11 @@ func containerFields(isUpdatable, isInitContainer bool) map[string]*schema.Schem
 												Type:        schema.TypeString,
 												Optional:    true,
 												Description: "Name of the referent. More info: http://kubernetes.io/docs/user-guide/identifiers#names",
+											},
+											"optional": {
+												Type:        schema.TypeBool,
+												Optional:    true,
+												Description: "Specify whether the Secret or its key must be defined.",
 											},
 										},
 									},
@@ -347,7 +349,7 @@ func containerFields(isUpdatable, isInitContainer bool) map[string]*schema.Schem
 					"prefix": {
 						Type:        schema.TypeString,
 						Optional:    true,
-						Description: "An optional identifier to prepend to each key in the ConfigMap. Must be a C_IDENTIFIER.",
+						Description: "An optional identifer to prepend to each key in the ConfigMap. Must be a C_IDENTIFIER.",
 					},
 					"secret_ref": {
 						Type:        schema.TypeList,
@@ -475,13 +477,19 @@ func containerFields(isUpdatable, isInitContainer bool) map[string]*schema.Schem
 				Schema: resourcesField(),
 			},
 		},
-
 		"security_context": {
 			Type:        schema.TypeList,
 			Optional:    true,
 			MaxItems:    1,
 			Description: "Security options the pod should run with. More info: http://releases.k8s.io/HEAD/docs/design/security_context.md",
 			Elem:        securityContextSchema(),
+		},
+		"startup_probe": {
+			Type:        schema.TypeList,
+			Optional:    true,
+			MaxItems:    1,
+			Description: "StartupProbe indicates that the Pod has successfully initialized. If specified, no other probes are executed until this completes successfully. If this probe fails, the Pod will be restarted, just as if the livenessProbe failed. This can be used to provide different probe parameters at the beginning of a Pod's lifecycle, when it might take a long time to load data or warm a cache, than during steady-state operation. This cannot be updated. This is an alpha feature enabled by the StartupProbe feature flag. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes",
+			Elem:        probeSchema(),
 		},
 		"stdin": {
 			Type:        schema.TypeBool,
@@ -500,6 +508,13 @@ func containerFields(isUpdatable, isInitContainer bool) map[string]*schema.Schem
 			Optional:    true,
 			Default:     "/dev/termination-log",
 			Description: "Optional: Path at which the file to which the container's termination message will be written is mounted into the container's filesystem. Message written is intended to be brief final status, such as an assertion failure message. Defaults to /dev/termination-log. Cannot be updated.",
+		},
+		"termination_message_policy": {
+			Type:         schema.TypeString,
+			Optional:     true,
+			ValidateFunc: validation.StringInSlice([]string{"File", "FallbackToLogsOnError"}, false),
+			Computed:     true,
+			Description:  "Optional: Indicate how the termination message should be populated. File will use the contents of terminationMessagePath to populate the container status message on both success and failure. FallbackToLogsOnError will use the last chunk of container log output if the termination message file is empty and the container exited with an error. The log output is limited to 2048 bytes or 80 lines, whichever is smaller. Defaults to File. Cannot be updated.",
 		},
 		"tty": {
 			Type:        schema.TypeBool,
@@ -575,6 +590,7 @@ func probeSchema() *schema.Resource {
 	return &schema.Resource{
 		Schema: h,
 	}
+
 }
 
 func securityContextSchema() *schema.Resource {

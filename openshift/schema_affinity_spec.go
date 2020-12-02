@@ -3,8 +3,8 @@ package openshift
 import (
 	"regexp"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 func affinityFields() map[string]*schema.Schema {
@@ -153,7 +153,7 @@ func podAffinityTermFields() map[string]*schema.Schema {
 			Description: "A label query over a set of resources, in this case pods.",
 			Optional:    true,
 			Elem: &schema.Resource{
-				Schema: labelSelectorFields(false),
+				Schema: labelSelectorFields(true),
 			},
 		},
 		"namespaces": {

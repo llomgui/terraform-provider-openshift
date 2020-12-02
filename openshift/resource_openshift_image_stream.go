@@ -1,11 +1,12 @@
 package openshift
 
 import (
-	"fmt"
+	"context"
 	"log"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	api "github.com/openshift/api/image/v1"
 	client_v1 "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -16,13 +17,12 @@ import (
 
 func resourceOpenshiftImageStream() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceOpenshiftImageStreamCreate,
-		Read:   resourceOpenshiftImageStreamRead,
-		Update: resourceOpenshiftImageStreamUpdate,
-		Delete: resourceOpenshiftImageStreamDelete,
-		Exists: resourceOpenshiftImageStreamExists,
+		CreateContext: resourceOpenshiftImageStreamCreate,
+		ReadContext:   resourceOpenshiftImageStreamRead,
+		UpdateContext: resourceOpenshiftImageStreamUpdate,
+		DeleteContext: resourceOpenshiftImageStreamDelete,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 
 		Timeouts: &schema.ResourceTimeout{
@@ -132,13 +132,11 @@ func resourceOpenshiftImageStream() *schema.Resource {
 													Type:        schema.TypeBool,
 													Description: "(boolean) Insecure is true if the server may bypass certificate verification or connect directly over HTTP during image import.",
 													Optional:    true,
-													Default:     false,
 												},
 												"scheduled": {
 													Type:        schema.TypeBool,
 													Description: "(boolean) Scheduled indicates to the server that this tag should be periodically checked to ensure it is up to date, and imported",
 													Optional:    true,
-													Default:     false,
 												},
 											},
 										},
@@ -181,16 +179,16 @@ func resourceOpenshiftImageStream() *schema.Resource {
 	}
 }
 
-func resourceOpenshiftImageStreamCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenshiftImageStreamCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	metadata := expandMetadata(d.Get("metadata").([]interface{}))
 	spec, err := expandImageStreamSpec(d.Get("spec").([]interface{}))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	imageStream := api.ImageStream{
@@ -199,69 +197,76 @@ func resourceOpenshiftImageStreamCreate(d *schema.ResourceData, meta interface{}
 	}
 
 	log.Printf("[INFO] Creating new imagestream: %#v", imageStream)
-	out, err := client.ImageStreams(metadata.Namespace).Create(&imageStream)
+	out, err := client.ImageStreams(metadata.Namespace).Create(ctx, &imageStream, meta_v1.CreateOptions{})
 	if err != nil {
-		return fmt.Errorf("Failed to create imagestream: %s", err)
+		return diag.Errorf("Failed to create imagestream: %s", err)
 	}
 	log.Printf("[INFO] Submitted new imagestream: %#v", out)
 	d.SetId(buildId(out.ObjectMeta))
 
-	return resourceOpenshiftImageStreamRead(d, meta)
+	return resourceOpenshiftImageStreamRead(ctx, d, meta)
 }
 
-func resourceOpenshiftImageStreamRead(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenshiftImageStreamRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	exists, err := resourceOpenshiftImageStreamExists(ctx, d, meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	if !exists {
+		return diag.Diagnostics{}
+	}
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	namespace, name, err := idParts(d.Id())
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	log.Printf("[INFO] Reading imagestream %s", name)
-	imageStream, err := client.ImageStreams(namespace).Get(name, meta_v1.GetOptions{})
+	imageStream, err := client.ImageStreams(namespace).Get(ctx, name, meta_v1.GetOptions{})
 	if err != nil {
 		log.Printf("[DEBUG] Received error: %#v", err)
-		return err
+		return diag.FromErr(err)
 	}
 
 	log.Printf("[INFO] Received imagestream: %#v", imageStream)
 	err = d.Set("metadata", flattenMetadata(imageStream.ObjectMeta, d))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	spec, err := flattenImageStreamSpec(imageStream.Spec, d)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	err = d.Set("spec", spec)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	return nil
 }
 
-func resourceOpenshiftImageStreamUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenshiftImageStreamUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	namespace, name, err := idParts(d.Id())
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	ops := patchMetadata("metadata.0.", "/metadata/", d)
 	if d.HasChange("spec") {
 		spec, err := expandImageStreamSpec(d.Get("spec").([]interface{}))
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 
 		ops = append(ops, &ReplaceOperation{
@@ -272,44 +277,44 @@ func resourceOpenshiftImageStreamUpdate(d *schema.ResourceData, meta interface{}
 
 	data, err := ops.MarshalJSON()
 	if err != nil {
-		return fmt.Errorf("Failed to marshal update operations: %s", err)
+		return diag.Errorf("Failed to marshal update operations: %s", err)
 	}
 
 	log.Printf("[INFO] Updating imagestream %q: %v", name, string(data))
-	out, err := client.ImageStreams(namespace).Patch(name, pkgApi.JSONPatchType, data)
+	out, err := client.ImageStreams(namespace).Patch(ctx, name, pkgApi.JSONPatchType, data, meta_v1.PatchOptions{})
 	if err != nil {
-		return fmt.Errorf("Failed to update imagestream: %s", err)
+		return diag.Errorf("Failed to update imagestream: %s", err)
 	}
 	log.Printf("[INFO] Submitted updated imagestream: %#v", out)
 
 	d.SetId(buildId(out.ObjectMeta))
 
-	return resourceOpenshiftImageStreamRead(d, meta)
+	return resourceOpenshiftImageStreamRead(ctx, d, meta)
 }
 
-func resourceOpenshiftImageStreamDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenshiftImageStreamDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	namespace, name, err := idParts(d.Id())
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	log.Printf("[INFO] Deleting imagestream: %#v", name)
 
-	err = client.ImageStreams(namespace).Delete(name, &meta_v1.DeleteOptions{})
+	err = client.ImageStreams(namespace).Delete(ctx, name, meta_v1.DeleteOptions{})
 	if err != nil {
-		return fmt.Errorf("Failed to delete imagestream: %s", err)
+		return diag.Errorf("Failed to delete imagestream: %s", err)
 	}
 
 	d.SetId("")
 	return nil
 }
 
-func resourceOpenshiftImageStreamExists(d *schema.ResourceData, meta interface{}) (bool, error) {
+func resourceOpenshiftImageStreamExists(ctx context.Context, d *schema.ResourceData, meta interface{}) (bool, error) {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
 		return false, err
@@ -321,7 +326,7 @@ func resourceOpenshiftImageStreamExists(d *schema.ResourceData, meta interface{}
 	}
 
 	log.Printf("[INFO] Checking imagestream %s", name)
-	_, err = client.ImageStreams(namespace).Get(name, meta_v1.GetOptions{})
+	_, err = client.ImageStreams(namespace).Get(ctx, name, meta_v1.GetOptions{})
 	if err != nil {
 		if statusErr, ok := err.(*errors.StatusError); ok && statusErr.ErrStatus.Code == 404 {
 			return false, nil

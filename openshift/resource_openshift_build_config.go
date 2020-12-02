@@ -1,11 +1,12 @@
 package openshift
 
 import (
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 
-	"fmt"
 	"log"
+	"context"
 
 	api "github.com/openshift/api/build/v1"
 	client_v1 "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
@@ -17,13 +18,13 @@ import (
 
 func resourceOpenshiftBuildConfig() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceOpenshiftBuildConfigCreate,
-		Read:   resourceOpenshiftBuildConfigRead,
-		Update: resourceOpenshiftBuildConfigUpdate,
-		Delete: resourceOpenshiftBuildConfigDelete,
-		Exists: resourceOpenshiftBuildConfigExists,
+		CreateContext: resourceOpenshiftBuildConfigCreate,
+		ReadContext:   resourceOpenshiftBuildConfigRead,
+		UpdateContext: resourceOpenshiftBuildConfigUpdate,
+		DeleteContext: resourceOpenshiftBuildConfigDelete,
+
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 
 		Schema: map[string]*schema.Schema{
@@ -1267,16 +1268,16 @@ func resourceOpenshiftBuildConfig() *schema.Resource {
 	}
 }
 
-func resourceOpenshiftBuildConfigCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenshiftBuildConfigCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	metadata := expandMetadata(d.Get("metadata").([]interface{}))
 	spec, err := expandBuildConfigSpec(d.Get("spec").([]interface{}))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	buildConfig := api.BuildConfig{
@@ -1285,69 +1286,76 @@ func resourceOpenshiftBuildConfigCreate(d *schema.ResourceData, meta interface{}
 	}
 
 	log.Printf("[INFO] Creating new build config: %#v", buildConfig)
-	out, err := client.BuildConfigs(metadata.Namespace).Create(&buildConfig)
+	out, err := client.BuildConfigs(metadata.Namespace).Create(ctx, &buildConfig, meta_v1.CreateOptions{})
 	if err != nil {
-		return fmt.Errorf("Failed to create build config: %s", err)
+		return diag.Errorf("Failed to create build config: %s", err)
 	}
 	log.Printf("[INFO] Submitted new build config: %#v", out)
 	d.SetId(buildId(out.ObjectMeta))
 
-	return resourceOpenshiftBuildConfigRead(d, meta)
+	return resourceOpenshiftBuildConfigRead(ctx, d, meta)
 }
 
-func resourceOpenshiftBuildConfigRead(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenshiftBuildConfigRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	exists, err := resourceOpenshiftBuildConfigExists(ctx, d, meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	if !exists {
+		return diag.Diagnostics{}
+	}
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	namespace, name, err := idParts(d.Id())
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	log.Printf("[INFO] Reading build config %s", name)
-	buildConfig, err := client.BuildConfigs(namespace).Get(name, meta_v1.GetOptions{})
+	buildConfig, err := client.BuildConfigs(namespace).Get(ctx, name, meta_v1.GetOptions{})
 	if err != nil {
 		log.Printf("[DEBUG] Received error: %#v", err)
-		return err
+		return diag.FromErr(err)
 	}
 
 	log.Printf("[INFO] Received build config: %#v", buildConfig)
 	err = d.Set("metadata", flattenMetadata(buildConfig.ObjectMeta, d))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	spec, err := flattenBuildConfigSpec(buildConfig.Spec, d)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	err = d.Set("spec", spec)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	return nil
 }
 
-func resourceOpenshiftBuildConfigUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenshiftBuildConfigUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	namespace, name, err := idParts(d.Id())
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	ops := patchMetadata("metadata.0.", "/metadata/", d)
 	if d.HasChange("spec") {
 		spec, err := expandBuildConfigSpec(d.Get("spec").([]interface{}))
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 
 		ops = append(ops, &ReplaceOperation{
@@ -1358,44 +1366,44 @@ func resourceOpenshiftBuildConfigUpdate(d *schema.ResourceData, meta interface{}
 
 	data, err := ops.MarshalJSON()
 	if err != nil {
-		return fmt.Errorf("Failed to marshal update operations: %s", err)
+		return diag.Errorf("Failed to marshal update operations: %s", err)
 	}
 
 	log.Printf("[INFO] Updating build config %q: %v", name, string(data))
-	out, err := client.BuildConfigs(namespace).Patch(name, pkgApi.JSONPatchType, data)
+	out, err := client.BuildConfigs(namespace).Patch(ctx, name, pkgApi.JSONPatchType, data, meta_v1.PatchOptions{})
 	if err != nil {
-		return fmt.Errorf("Failed to update build config: %s", err)
+		return diag.FromErr(err)
 	}
 	log.Printf("[INFO] Submitted updated build config: %#v", out)
 
 	d.SetId(buildId(out.ObjectMeta))
 
-	return resourceOpenshiftBuildConfigRead(d, meta)
+	return resourceOpenshiftBuildConfigRead(ctx, d, meta)
 }
 
-func resourceOpenshiftBuildConfigDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenshiftBuildConfigDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	namespace, name, err := idParts(d.Id())
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	log.Printf("[INFO] Deleting build config: %#v", name)
 
-	err = client.BuildConfigs(namespace).Delete(name, &meta_v1.DeleteOptions{})
+	err = client.BuildConfigs(namespace).Delete(ctx, name, meta_v1.DeleteOptions{})
 	if err != nil {
-		return fmt.Errorf("Failed to delete build config: %s", err)
+		return diag.FromErr(err)
 	}
 
 	d.SetId("")
 	return nil
 }
 
-func resourceOpenshiftBuildConfigExists(d *schema.ResourceData, meta interface{}) (bool, error) {
+func resourceOpenshiftBuildConfigExists(ctx context.Context, d *schema.ResourceData, meta interface{}) (bool, error) {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
 		return false, err
@@ -1407,7 +1415,7 @@ func resourceOpenshiftBuildConfigExists(d *schema.ResourceData, meta interface{}
 	}
 
 	log.Printf("[INFO] Checking build config %s", name)
-	_, err = client.BuildConfigs(namespace).Get(name, meta_v1.GetOptions{})
+	_, err = client.BuildConfigs(namespace).Get(ctx, name, meta_v1.GetOptions{})
 	if err != nil {
 		if statusErr, ok := err.(*errors.StatusError); ok && statusErr.ErrStatus.Code == 404 {
 			return false, nil
