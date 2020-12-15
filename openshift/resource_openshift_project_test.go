@@ -3,7 +3,6 @@ package openshift
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"regexp"
 	"testing"
 
@@ -221,52 +220,6 @@ func TestAccOpenshiftProject_deleteTimeout(t *testing.T) {
 			},
 		},
 	})
-}
-
-func testAccCheckMetaAnnotations(om *meta_v1.ObjectMeta, expected map[string]string) resource.TestCheckFunc {
-	return func(s *terraform.State) error {
-		if len(expected) == 0 && len(om.Annotations) == 0 {
-			return nil
-		}
-
-		// Remove any internal k8s annotations unless we expect them
-		annotations := om.Annotations
-		for key := range annotations {
-			_, isExpected := expected[key]
-			if isInternalKey(key) && !isExpected {
-				delete(annotations, key)
-			}
-		}
-
-		if !reflect.DeepEqual(annotations, expected) {
-			return fmt.Errorf("%s annotations don't match.\nExpected: %q\nGiven: %q",
-				om.Name, expected, om.Annotations)
-		}
-		return nil
-	}
-}
-
-func testAccCheckMetaLabels(om *meta_v1.ObjectMeta, expected map[string]string) resource.TestCheckFunc {
-	return func(s *terraform.State) error {
-		if len(expected) == 0 && len(om.Labels) == 0 {
-			return nil
-		}
-
-		// Remove any internal k8s labels unless we expect them
-		labels := om.Labels
-		for key := range labels {
-			_, isExpected := expected[key]
-			if isInternalKey(key) && !isExpected {
-				delete(labels, key)
-			}
-		}
-
-		if !reflect.DeepEqual(labels, expected) {
-			return fmt.Errorf("%s labels don't match.\nExpected: %q\nGiven: %q",
-				om.Name, expected, om.Labels)
-		}
-		return nil
-	}
 }
 
 func testAccCheckOpenshiftProjectDestroy(s *terraform.State) error {

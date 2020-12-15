@@ -1,12 +1,12 @@
 package openshift
 
 import (
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 
-	"log"
 	"context"
+	"log"
 
 	api "github.com/openshift/api/build/v1"
 	client_v1 "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"

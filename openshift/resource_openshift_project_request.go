@@ -6,9 +6,9 @@ import (
 	"log"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	api "github.com/openshift/api/project/v1"
 	client_v1 "github.com/openshift/client-go/project/clientset/versioned/typed/project/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -143,7 +143,7 @@ func resourceOpenshiftProjectRequestDelete(ctx context.Context, d *schema.Resour
 			return out, statusPhase, nil
 		},
 	}
-	_, err = stateConf.WaitForState()
+	_, err = stateConf.WaitForStateContext(ctx)
 	if err != nil {
 		diag.FromErr(err)
 	}

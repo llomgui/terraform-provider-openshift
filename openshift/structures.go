@@ -257,22 +257,6 @@ func schemaSetToInt64Array(set *schema.Set) []int64 {
 	return array
 }
 
-func flattenPersistentVolumeAccessModes(in []api.PersistentVolumeAccessMode) *schema.Set {
-	var out = make([]interface{}, len(in), len(in))
-	for i, v := range in {
-		out[i] = string(v)
-	}
-	return schema.NewSet(schema.HashString, out)
-}
-
-func expandPersistentVolumeAccessModes(s []interface{}) []api.PersistentVolumeAccessMode {
-	out := make([]api.PersistentVolumeAccessMode, len(s), len(s))
-	for i, v := range s {
-		out[i] = api.PersistentVolumeAccessMode(v.(string))
-	}
-	return out
-}
-
 func flattenLocalObjectReferenceArray(in []api.LocalObjectReference) []interface{} {
 	att := make([]interface{}, len(in))
 	for i, v := range in {
@@ -443,21 +427,4 @@ func expandBuildConfigImageDefinitionPtr(l []interface{}) *api.ObjectReference {
 	}
 
 	return obj
-}
-
-func schemaSetToStringArray(set *schema.Set) []string {
-	array := make([]string, 0, set.Len())
-	for _, elem := range set.List() {
-		e := elem.(string)
-		array = append(array, e)
-	}
-	return array
-}
-
-func flattenPersistentVolumeMountOptions(in []string) *schema.Set {
-	var out = make([]interface{}, len(in), len(in))
-	for i, v := range in {
-		out[i] = string(v)
-	}
-	return schema.NewSet(schema.HashString, out)
 }

@@ -349,7 +349,7 @@ func containerFields(isUpdatable, isInitContainer bool) map[string]*schema.Schem
 					"prefix": {
 						Type:        schema.TypeString,
 						Optional:    true,
-						Description: "An optional identifer to prepend to each key in the ConfigMap. Must be a C_IDENTIFIER.",
+						Description: "An optional identifier to prepend to each key in the ConfigMap. Must be a C_IDENTIFIER.",
 					},
 					"secret_ref": {
 						Type:        schema.TypeList,
@@ -590,7 +590,6 @@ func probeSchema() *schema.Resource {
 	return &schema.Resource{
 		Schema: h,
 	}
-
 }
 
 func securityContextSchema() *schema.Resource {

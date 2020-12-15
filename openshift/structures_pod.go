@@ -807,7 +807,6 @@ func expandSysctls(l []interface{}) []v1.Sysctl {
 		if v, ok := p["value"].(string); ok {
 			sysctls[i].Value = v
 		}
-
 	}
 	return sysctls
 }
@@ -852,7 +851,6 @@ func expandKeyPath(in []interface{}) []v1.KeyToPath {
 		if v, ok := p["path"].(string); ok {
 			keyPaths[i].Path = v
 		}
-
 	}
 	return keyPaths
 }
@@ -1351,31 +1349,4 @@ func expandReadinessGates(gates []interface{}) ([]v1.PodReadinessGate, error) {
 		}
 	}
 	return cs, nil
-}
-
-func patchPodSpec(pathPrefix, prefix string, d *schema.ResourceData) (PatchOperations, error) {
-	ops := make([]PatchOperation, 0)
-
-	if d.HasChange(prefix + "active_deadline_seconds") {
-		v := d.Get(prefix + "active_deadline_seconds").(int)
-		ops = append(ops, &ReplaceOperation{
-			Path:  pathPrefix + "/activeDeadlineSeconds",
-			Value: v,
-		})
-	}
-
-	if d.HasChange(prefix + "container") {
-		containers := d.Get(prefix + "container").([]interface{})
-		value, _ := expandContainers(containers)
-
-		for i, v := range value {
-			ops = append(ops, &ReplaceOperation{
-				Path:  pathPrefix + "/containers/" + strconv.Itoa(i) + "/image",
-				Value: v.Image,
-			})
-
-		}
-
-	}
-	return ops, nil
 }

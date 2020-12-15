@@ -2,11 +2,11 @@ package openshift
 
 import (
 	"context"
-	"fmt"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
@@ -229,7 +229,6 @@ func testAccPreCheck(t *testing.T) {
 	if diags.HasError() {
 		t.Fatal(diags[0].Summary)
 	}
-	return
 }
 
 type currentEnv struct {
@@ -246,20 +245,4 @@ type currentEnv struct {
 	Insecure          string
 	LoadConfigFile    string
 	Token             string
-}
-
-func requiredProviders() string {
-	return fmt.Sprintf(`terraform {
-  required_providers {
-    kubernetes-local = {
-      source  = "localhost/test/kubernetes"
-      version = "9.9.9"
-    }
-    kubernetes-released = {
-      source  = "hashicorp/kubernetes"
-      version = "~> 1.13.2"
-    }
-  }
-}
-`)
 }

@@ -1,13 +1,13 @@
 package openshift
 
 import (
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 func flattenCapability(in []v1.Capability) []string {
-	att := make([]string, len(in), len(in))
+	att := make([]string, len(in))
 	for i, v := range in {
 		att[i] = string(v)
 	}
@@ -42,7 +42,6 @@ func flattenContainerSecurityContext(in *v1.SecurityContext) []interface{} {
 		att["se_linux_options"] = flattenSeLinuxOptions(in.SELinuxOptions)
 	}
 	return []interface{}{att}
-
 }
 
 func flattenSecurityCapabilities(in *v1.Capabilities) []interface{} {
@@ -265,11 +264,9 @@ func flattenContainerVolumeMounts(in []v1.VolumeMount) ([]interface{}, error) {
 
 		if v.MountPath != "" {
 			m["mount_path"] = v.MountPath
-
 		}
 		if v.Name != "" {
 			m["name"] = v.Name
-
 		}
 		if v.SubPath != "" {
 			m["sub_path"] = v.SubPath
@@ -437,7 +434,6 @@ func expandContainers(ctrs []interface{}) ([]v1.Container, error) {
 		}
 
 		if v, ok := ctr["resources"].([]interface{}); ok && len(v) > 0 {
-
 			var err error
 			crr, err := expandContainerResourceRequirements(v)
 			if err != nil {
@@ -580,12 +576,11 @@ func expandContainerSecurityContext(l []interface{}) *v1.SecurityContext {
 	if v, ok := in["se_linux_options"].([]interface{}); ok && len(v) > 0 {
 		obj.SELinuxOptions = expandSeLinuxOptions(v)
 	}
-
 	return &obj
 }
 
 func expandCapabilitySlice(s []interface{}) []v1.Capability {
-	result := make([]v1.Capability, len(s), len(s))
+	result := make([]v1.Capability, len(s))
 	for k, v := range s {
 		result[k] = v1.Capability(v.(string))
 	}
@@ -695,8 +690,8 @@ func expandHandlers(l []interface{}) *v1.Handler {
 		obj.TCPSocket = expandTCPSocket(v)
 	}
 	return &obj
-
 }
+
 func expandLifeCycle(l []interface{}) *v1.Lifecycle {
 	if len(l) == 0 || l[0] == nil {
 		return &v1.Lifecycle{}
@@ -835,7 +830,6 @@ func expandConfigMapKeyRef(r []interface{}) (*v1.ConfigMapKeySelector, error) {
 		obj.Optional = ptrToBool(v.(bool))
 	}
 	return obj, nil
-
 }
 func expandFieldRef(r []interface{}) (*v1.ObjectFieldSelector, error) {
 	if len(r) == 0 || r[0] == nil {
@@ -944,7 +938,6 @@ func expandEnvValueFrom(r []interface{}) (*v1.EnvVarSource, error) {
 		}
 	}
 	return obj, nil
-
 }
 
 func expandConfigMapRef(r []interface{}) (*v1.ConfigMapEnvSource, error) {

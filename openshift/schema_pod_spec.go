@@ -221,6 +221,7 @@ func podSpecFields(isUpdatable, isDeprecated, isComputed bool) map[string]*schem
 			Computed:    isComputed,
 			Description: "NodeSelector is a selector which must be true for the pod to fit on a node. Selector which must match a node's labels for the pod to be scheduled on that node. More info: http://kubernetes.io/docs/user-guide/node-selection.",
 			Deprecated:  deprecatedMessage,
+			Elem:        &schema.Schema{Type: schema.TypeString},
 		},
 		"priority_class_name": {
 			Type:        schema.TypeString,
@@ -698,7 +699,7 @@ func volumeSchema(isUpdatable bool) *schema.Resource {
 					Elem: &schema.Resource{
 						Schema: map[string]*schema.Schema{
 							// identical to SecretVolumeSource but without the default mode and uses a local object reference as name instead of a secret name.
-							"secret": &schema.Schema{
+							"secret": {
 								Type:        schema.TypeList,
 								Description: "Secret represents a secret that should populate this volume. More info: http://kubernetes.io/docs/user-guide/volumes#secrets",
 								Optional:    true,
@@ -744,7 +745,7 @@ func volumeSchema(isUpdatable bool) *schema.Resource {
 								},
 							},
 							// identical to ConfigMapVolumeSource but without the default mode and uses a local object reference as name instead of a secret name.
-							"config_map": &schema.Schema{
+							"config_map": {
 								Type:        schema.TypeList,
 								Description: "ConfigMap represents a configMap that should populate this volume",
 								Optional:    true,
@@ -790,7 +791,7 @@ func volumeSchema(isUpdatable bool) *schema.Resource {
 								},
 							},
 							// identical to DownwardAPIVolumeSource but without the default mode.
-							"downward_api": &schema.Schema{
+							"downward_api": {
 								Type:        schema.TypeList,
 								Description: "DownwardAPI represents downward API about the pod that should populate this volume",
 								Optional:    true,
@@ -865,7 +866,7 @@ func volumeSchema(isUpdatable bool) *schema.Resource {
 									},
 								},
 							},
-							"service_account_token": &schema.Schema{
+							"service_account_token": {
 								Type:        schema.TypeList,
 								Description: "A projected service account token volume",
 								Optional:    true,

@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	api "github.com/openshift/api/network/v1"
 	client_v1 "github.com/openshift/client-go/network/clientset/versioned/typed/network/v1"
 	"k8s.io/apimachinery/pkg/api/errors"

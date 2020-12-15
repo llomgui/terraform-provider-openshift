@@ -5,12 +5,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
-func persistentVolumeSourceSchema() *schema.Resource {
-	return &schema.Resource{
-		Schema: commonVolumeSources(),
-	}
-}
-
 // Common volume sources between Persistent Volumes and Pod Volumes
 func commonVolumeSources() map[string]*schema.Schema {
 	return map[string]*schema.Schema{
@@ -231,6 +225,7 @@ func commonVolumeSources() map[string]*schema.Schema {
 						Type:        schema.TypeMap,
 						Description: "Attributes of the volume to publish.",
 						Optional:    true,
+						Elem:        &schema.Schema{Type: schema.TypeString},
 					},
 					"fs_type": {
 						Type:        schema.TypeString,
@@ -302,6 +297,7 @@ func commonVolumeSources() map[string]*schema.Schema {
 						Type:        schema.TypeMap,
 						Description: "Extra command options if any.",
 						Optional:    true,
+						Elem:        &schema.Schema{Type: schema.TypeString},
 					},
 					"read_only": {
 						Type:        schema.TypeBool,

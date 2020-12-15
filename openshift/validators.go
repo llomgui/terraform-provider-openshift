@@ -161,6 +161,7 @@ func validateModeBits(value interface{}, key string) (ws []string, es []error) {
 	return
 }
 
+//nolint:staticcheck
 func validateAttributeValueDoesNotContain(searchString string) schema.SchemaValidateFunc {
 	return func(v interface{}, k string) (ws []string, errors []error) {
 		input := v.(string)
@@ -173,6 +174,7 @@ func validateAttributeValueDoesNotContain(searchString string) schema.SchemaVali
 	}
 }
 
+//nolint:staticcheck
 func validateAttributeValueIsIn(validValues []string) schema.SchemaValidateFunc {
 	return func(v interface{}, k string) (ws []string, errors []error) {
 		input := v.(string)

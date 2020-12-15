@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	api "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -130,7 +130,10 @@ func resourceOpenshiftSecretRead(ctx context.Context, d *schema.ResourceData, me
 		return diag.FromErr(err)
 	}
 
-	d.Set("type", secret.Type)
+	err = d.Set("type", secret.Type)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
 	secretData := flattenByteMapToStringMap(secret.Data)
 	// Remove base64data keys from the payload before setting the data key on the resource. If
@@ -141,8 +144,11 @@ func resourceOpenshiftSecretRead(ctx context.Context, d *schema.ResourceData, me
 		}
 		delete(secretData, key)
 	}
-	//lintignore:XR004
-	d.Set("data", secretData)
+
+	err = d.Set("data", secretData)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
 	return nil
 }
