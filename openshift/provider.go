@@ -2,13 +2,14 @@ package openshift
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/logging"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/terraform"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/logging"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/mitchellh/go-homedir"
 	apimachineryschema "k8s.io/apimachinery/pkg/runtime/schema"
 	restclient "k8s.io/client-go/rest"
@@ -16,7 +17,7 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
-func Provider() terraform.ResourceProvider {
+func Provider() *schema.Provider {
 	p := &schema.Provider{
 		Schema: map[string]*schema.Schema{
 			"host": {
@@ -143,27 +144,26 @@ func Provider() terraform.ResourceProvider {
 		},
 	}
 
-	p.ConfigureFunc = func(d *schema.ResourceData) (interface{}, error) {
-		terraformVersion := p.TerraformVersion
-		if terraformVersion == "" {
-			// Terraform 0.12 introduced this field to the protocol
-			// We can therefore assume that if it's missing it's 0.10 or 0.11
-			terraformVersion = "0.11+compatible"
-		}
-		return providerConfigure(d, terraformVersion)
+	p.ConfigureContextFunc = func(ctx context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {
+		return providerConfigure(ctx, d, p.TerraformVersion)
 	}
 
 	return p
 }
 
-func providerConfigure(d *schema.ResourceData, terraformVersion string) (interface{}, error) {
+func providerConfigure(ctx context.Context, d *schema.ResourceData, terraformVersion string) (interface{}, diag.Diagnostics) {
+	// Config initialization
 	cfg, err := initializeConfiguration(d)
 	if err != nil {
-		return nil, err
+		return nil, diag.FromErr(err)
 	}
 
 	if cfg == nil {
-		return nil, fmt.Errorf("Failed to initialize config")
+		// This is a TEMPORARY measure to work around https://github.com/hashicorp/terraform/issues/24055
+		// IMPORTANT: this will NOT enable a workaround of issue: https://github.com/hashicorp/terraform/issues/4149
+		// IMPORTANT: if the supplied configuration is incomplete or invalid
+		///IMPORTANT: provider operations will fail or attempt to connect to localhost endpoints
+		cfg = &restclient.Config{}
 	}
 
 	cfg.UserAgent = fmt.Sprintf("HashiCorp/1.0 Terraform/%s", terraformVersion)
@@ -175,11 +175,7 @@ func providerConfigure(d *schema.ResourceData, terraformVersion string) (interfa
 		}
 	}
 
-	if err != nil {
-		return nil, fmt.Errorf("Failed to configure: %s", err)
-	}
-
-	return cfg, nil
+	return cfg, diag.Diagnostics{}
 }
 
 func initializeConfiguration(d *schema.ResourceData) (*restclient.Config, error) {
@@ -196,31 +192,30 @@ func initializeConfiguration(d *schema.ResourceData) (*restclient.Config, error)
 			log.Printf("[DEBUG] Configuration file is: %s", path)
 			loader.ExplicitPath = path
 
-			ctxSuffix := "; default context"
+			//ctxSuffix := "; default context"
 
 			ctx, ctxOk := d.GetOk("config_context")
 			authInfo, authInfoOk := d.GetOk("config_context_auth_info")
 			cluster, clusterOk := d.GetOk("config_context_cluster")
 			if ctxOk || authInfoOk || clusterOk {
-				ctxSuffix = "; overridden context"
+				//ctxSuffix = "; overridden context"
 				if ctxOk {
 					overrides.CurrentContext = ctx.(string)
-					ctxSuffix += fmt.Sprintf("; config ctx: %s", overrides.CurrentContext)
+					//ctxSuffix += fmt.Sprintf("; config ctx: %s", overrides.CurrentContext)
 					log.Printf("[DEBUG] Using custom current context: %q", overrides.CurrentContext)
 				}
 
 				overrides.Context = clientcmdapi.Context{}
 				if authInfoOk {
 					overrides.Context.AuthInfo = authInfo.(string)
-					ctxSuffix += fmt.Sprintf("; auth_info: %s", overrides.Context.AuthInfo)
+					//ctxSuffix += fmt.Sprintf("; auth_info: %s", overrides.Context.AuthInfo)
 				}
 				if clusterOk {
 					overrides.Context.Cluster = cluster.(string)
-					ctxSuffix += fmt.Sprintf("; cluster: %s", overrides.Context.Cluster)
+					//ctxSuffix += fmt.Sprintf("; cluster: %s", overrides.Context.Cluster)
 				}
 				log.Printf("[DEBUG] Using overridden context: %#v", overrides.Context)
 			}
-			log.Printf("[INFO] Successfully loaded config file (%s%s)", path, ctxSuffix)
 		}
 	}
 
@@ -280,7 +275,8 @@ func initializeConfiguration(d *schema.ResourceData) (*restclient.Config, error)
 	cc := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loader, overrides)
 	cfg, err := cc.ClientConfig()
 	if err != nil {
-		return nil, fmt.Errorf("Failed to initialize config: %s", err)
+		log.Printf("[WARN] Invalid provider configuration was supplied. Provider operations likely to fail: %v", err)
+		return nil, nil
 	}
 
 	log.Printf("[INFO] Successfully initialized config")

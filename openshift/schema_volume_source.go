@@ -1,7 +1,8 @@
 package openshift
 
 import (
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 // Common volume sources between Persistent Volumes and Pod Volumes
@@ -18,6 +19,12 @@ func commonVolumeSources() map[string]*schema.Schema {
 						Type:        schema.TypeString,
 						Description: "Path of the directory on the host. More info: http://kubernetes.io/docs/user-guide/volumes#hostpath",
 						Optional:    true,
+					},
+					"type": {
+						Type:         schema.TypeString,
+						Description:  "Type for HostPath volume. Allowed values are \"\" (default), DirectoryOrCreate, Directory, FileOrCreate, File, Socket, CharDevice and BlockDevice",
+						Optional:     true,
+						ValidateFunc: validation.StringInSlice([]string{"", "DirectoryOrCreate", "Directory", "FileOrCreate", "File", "Socket", "CharDevice", "BlockDevice"}, false),
 					},
 				},
 			},
@@ -94,6 +101,12 @@ func commonVolumeSources() map[string]*schema.Schema {
 						Description: "Filesystem type to mount. Must be a filesystem type supported by the host operating system. Ex. \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.",
 						Optional:    true,
 					},
+					"kind": {
+						Type:        schema.TypeString,
+						Description: "The type for the data disk. Expected values: Shared, Dedicated, Managed. Defaults to Shared",
+						Optional:    true,
+						Computed:    true,
+					},
 					"read_only": {
 						Type:        schema.TypeBool,
 						Description: "Whether to force the read-only setting in VolumeMounts. Defaults to false (read/write).",
@@ -157,21 +170,7 @@ func commonVolumeSources() map[string]*schema.Schema {
 						Description: "The path to key ring for User, default is /etc/ceph/user.secret More info: http://releases.k8s.io/HEAD/examples/volumes/cephfs/README.md#how-to-use-it",
 						Optional:    true,
 					},
-					"secret_ref": {
-						Type:        schema.TypeList,
-						Description: "Reference to the authentication secret for User, default is empty. More info: http://releases.k8s.io/HEAD/examples/volumes/cephfs/README.md#how-to-use-it",
-						Optional:    true,
-						MaxItems:    1,
-						Elem: &schema.Resource{
-							Schema: map[string]*schema.Schema{
-								"name": {
-									Type:        schema.TypeString,
-									Description: "Name of the referent. More info: http://kubernetes.io/docs/user-guide/identifiers#names",
-									Optional:    true,
-								},
-							},
-						},
-					},
+					"secret_ref": commonVolumeSourcesSecretRef("Reference to the authentication secret for User, default is empty. More info: http://releases.k8s.io/HEAD/examples/volumes/cephfs/README.md#how-to-use-it"),
 					"user": {
 						Type:        schema.TypeString,
 						Description: "User is the rados user name, default is admin. More info: http://releases.k8s.io/HEAD/examples/volumes/cephfs/README.md#how-to-use-it",
@@ -202,6 +201,46 @@ func commonVolumeSources() map[string]*schema.Schema {
 						Description: "Volume ID used to identify the volume in Cinder. More info: http://releases.k8s.io/HEAD/examples/mysql-cinder-pd/README.md",
 						Required:    true,
 					},
+				},
+			},
+		},
+		"csi": {
+			Type:        schema.TypeList,
+			Description: "Represents a CSI Volume. More info: http://kubernetes.io/docs/user-guide/volumes#csi",
+			Optional:    true,
+			MaxItems:    1,
+			Elem: &schema.Resource{
+				Schema: map[string]*schema.Schema{
+					"driver": {
+						Type:        schema.TypeString,
+						Description: "the name of the volume driver to use. More info: https://kubernetes.io/docs/concepts/storage/volumes/#csi",
+						Required:    true,
+					},
+					"volume_handle": {
+						Type:        schema.TypeString,
+						Description: "A string value that uniquely identifies the volume. More info: https://kubernetes.io/docs/concepts/storage/volumes/#csi",
+						Required:    true,
+					},
+					"volume_attributes": {
+						Type:        schema.TypeMap,
+						Description: "Attributes of the volume to publish.",
+						Optional:    true,
+						Elem:        &schema.Schema{Type: schema.TypeString},
+					},
+					"fs_type": {
+						Type:        schema.TypeString,
+						Description: "Filesystem type to mount. Must be a filesystem type supported by the host operating system. Ex. \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.",
+						Optional:    true,
+					},
+					"read_only": {
+						Type:        schema.TypeBool,
+						Description: "Whether to set the read-only property in VolumeMounts to \"true\". If omitted, the default is \"false\". More info: http://kubernetes.io/docs/user-guide/volumes#csi",
+						Optional:    true,
+					},
+					"controller_publish_secret_ref": commonVolumeSourcesSecretRef("A reference to the secret object containing sensitive information to pass to the CSI driver to complete the CSI ControllerPublishVolume and ControllerUnpublishVolume calls."),
+					"node_stage_secret_ref":         commonVolumeSourcesSecretRef("A reference to the secret object containing sensitive information to pass to the CSI driver to complete the CSI NodeStageVolume and NodeStageVolume and NodeUnstageVolume calls."),
+					"node_publish_secret_ref":       commonVolumeSourcesSecretRef("A reference to the secret object containing sensitive information to pass to the CSI driver to complete the CSI NodePublishVolume and NodeUnpublishVolume calls."),
+					"controller_expand_secret_ref":  commonVolumeSourcesSecretRef("A reference to the secret object containing sensitive information to pass to the CSI driver to complete the CSI ControllerExpandVolume call."),
 				},
 			},
 		},
@@ -256,30 +295,16 @@ func commonVolumeSources() map[string]*schema.Schema {
 					},
 					"options": {
 						Type:        schema.TypeMap,
-						Elem:        &schema.Schema{Type: schema.TypeString},
 						Description: "Extra command options if any.",
 						Optional:    true,
+						Elem:        &schema.Schema{Type: schema.TypeString},
 					},
 					"read_only": {
 						Type:        schema.TypeBool,
 						Description: "Whether to force the ReadOnly setting in VolumeMounts. Defaults to false (read/write).",
 						Optional:    true,
 					},
-					"secret_ref": {
-						Type:        schema.TypeList,
-						Description: "Reference to the secret object containing sensitive information to pass to the plugin scripts. This may be empty if no secret object is specified. If the secret object contains more than one secret, all secrets are passed to the plugin scripts.",
-						Optional:    true,
-						MaxItems:    1,
-						Elem: &schema.Resource{
-							Schema: map[string]*schema.Schema{
-								"name": {
-									Type:        schema.TypeString,
-									Description: "Name of the referent. More info: http://kubernetes.io/docs/user-guide/identifiers#names",
-									Optional:    true,
-								},
-							},
-						},
-					},
+					"secret_ref": commonVolumeSourcesSecretRef("Reference to the secret object containing sensitive information to pass to the plugin scripts. This may be empty if no secret object is specified. If the secret object contains more than one secret, all secrets are passed to the plugin scripts."),
 				},
 			},
 		},
@@ -527,21 +552,7 @@ func commonVolumeSources() map[string]*schema.Schema {
 						Optional:    true,
 						Default:     false,
 					},
-					"secret_ref": {
-						Type:        schema.TypeList,
-						Description: "Name of the authentication secret for RBDUser. If provided overrides keyring. Default is nil. More info: http://releases.k8s.io/HEAD/examples/volumes/rbd/README.md#how-to-use-it",
-						Optional:    true,
-						MaxItems:    1,
-						Elem: &schema.Resource{
-							Schema: map[string]*schema.Schema{
-								"name": {
-									Type:        schema.TypeString,
-									Description: "Name of the referent. More info: http://kubernetes.io/docs/user-guide/identifiers#names",
-									Optional:    true,
-								},
-							},
-						},
-					},
+					"secret_ref": commonVolumeSourcesSecretRef("Name of the authentication secret for RBDUser. If provided overrides keyring. Default is nil. More info: http://releases.k8s.io/HEAD/examples/volumes/rbd/README.md#how-to-use-it"),
 				},
 			},
 		},
@@ -562,6 +573,30 @@ func commonVolumeSources() map[string]*schema.Schema {
 						Description: "Path that identifies vSphere volume vmdk",
 						Required:    true,
 					},
+				},
+			},
+		},
+	}
+}
+
+func commonVolumeSourcesSecretRef(description string) *schema.Schema {
+	return &schema.Schema{
+		Type:        schema.TypeList,
+		Description: description,
+		Optional:    true,
+		MaxItems:    1,
+		Elem: &schema.Resource{
+			Schema: map[string]*schema.Schema{
+				"name": {
+					Type:        schema.TypeString,
+					Description: "Name of the referent. More info: http://kubernetes.io/docs/user-guide/identifiers#names",
+					Optional:    true,
+				},
+				"namespace": {
+					Type:        schema.TypeString,
+					Description: "Name of the referent. More info: http://kubernetes.io/docs/user-guide/identifiers#names",
+					Optional:    true,
+					Computed:    true,
 				},
 			},
 		},

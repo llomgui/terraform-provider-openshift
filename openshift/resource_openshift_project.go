@@ -1,12 +1,14 @@
 package openshift
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	api "github.com/openshift/api/project/v1"
 	client_v1 "github.com/openshift/client-go/project/clientset/versioned/typed/project/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -17,13 +19,12 @@ import (
 
 func resourceOpenshiftProject() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceOpenshiftProjectCreate,
-		Read:   resourceOpenshiftProjectRead,
-		Update: resourceOpenshiftProjectUpdate,
-		Delete: resourceOpenshiftProjectDelete,
-		Exists: resourceOpenshiftProjectExists,
+		CreateContext: resourceOpenshiftProjectCreate,
+		ReadContext:   resourceOpenshiftProjectRead,
+		UpdateContext: resourceOpenshiftProjectUpdate,
+		DeleteContext: resourceOpenshiftProjectDelete,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 
 		Schema: map[string]*schema.Schema{
@@ -35,10 +36,10 @@ func resourceOpenshiftProject() *schema.Resource {
 	}
 }
 
-func resourceOpenshiftProjectCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenshiftProjectCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return err
+		diag.FromErr(err)
 	}
 
 	metadata := expandMetadata(d.Get("metadata").([]interface{}))
@@ -47,72 +48,79 @@ func resourceOpenshiftProjectCreate(d *schema.ResourceData, meta interface{}) er
 	}
 
 	log.Printf("[INFO] Creating new project: %#v", project)
-	out, err := client.Projects().Create(&project)
+	out, err := client.Projects().Create(ctx, &project, meta_v1.CreateOptions{})
 	if err != nil {
-		return err
+		diag.FromErr(err)
 	}
 	log.Printf("[INFO] Submitted new project: %#v", out)
 	d.SetId(out.Name)
 
-	return resourceOpenshiftProjectRead(d, meta)
+	return resourceOpenshiftProjectRead(ctx, d, meta)
 }
 
-func resourceOpenshiftProjectRead(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenshiftProjectRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	exists, err := resourceOpenshiftProjectExists(ctx, d, meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	if !exists {
+		return diag.Diagnostics{}
+	}
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return err
+		diag.FromErr(err)
 	}
 
 	name := d.Id()
 	log.Printf("[INFO] Reading project %s", name)
-	project, err := client.Projects().Get(name, meta_v1.GetOptions{})
+	project, err := client.Projects().Get(ctx, name, meta_v1.GetOptions{})
 	if err != nil {
 		log.Printf("[DEBUG] Received error: %#v", err)
-		return err
+		diag.FromErr(err)
 	}
 	log.Printf("[INFO] Received project: %#v", project)
 	err = d.Set("metadata", flattenMetadata(project.ObjectMeta, d))
 	if err != nil {
-		return err
+		diag.FromErr(err)
 	}
 
 	return nil
 }
 
-func resourceOpenshiftProjectUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenshiftProjectUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return err
+		diag.FromErr(err)
 	}
 
 	ops := patchMetadata("metadata.0.", "/metadata/", d)
 	metadata, err := ops.MarshalJSON()
 	if err != nil {
-		return fmt.Errorf("Failed to marshal update operations: %s", err)
+		return diag.Errorf("Failed to marshal update operations: %s", err)
 	}
 
 	log.Printf("[INFO] Updating project: %s", ops)
-	out, err := client.Projects().Patch(d.Id(), pkgApi.JSONPatchType, metadata)
+	out, err := client.Projects().Patch(ctx, d.Id(), pkgApi.JSONPatchType, metadata, meta_v1.PatchOptions{})
 	if err != nil {
-		return err
+		diag.FromErr(err)
 	}
 	log.Printf("[INFO] Submitted updated project: %#v", out)
 	d.SetId(out.Name)
 
-	return resourceOpenshiftProjectRead(d, meta)
+	return resourceOpenshiftProjectRead(ctx, d, meta)
 }
 
-func resourceOpenshiftProjectDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenshiftProjectDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return err
+		diag.FromErr(err)
 	}
 
 	name := d.Id()
 	log.Printf("[INFO] Deleting project: %#v", name)
-	err = client.Projects().Delete(name, &meta_v1.DeleteOptions{})
+	err = client.Projects().Delete(ctx, name, meta_v1.DeleteOptions{})
 	if err != nil {
-		return err
+		diag.FromErr(err)
 	}
 
 	stateConf := &resource.StateChangeConf{
@@ -120,7 +128,7 @@ func resourceOpenshiftProjectDelete(d *schema.ResourceData, meta interface{}) er
 		Pending: []string{"Terminating"},
 		Timeout: d.Timeout(schema.TimeoutDelete),
 		Refresh: func() (interface{}, string, error) {
-			out, err := client.Projects().Get(name, meta_v1.GetOptions{})
+			out, err := client.Projects().Get(ctx, name, meta_v1.GetOptions{})
 			if err != nil {
 				if statusErr, ok := err.(*errors.StatusError); ok && statusErr.ErrStatus.Code == 404 {
 					return nil, "", nil
@@ -134,9 +142,9 @@ func resourceOpenshiftProjectDelete(d *schema.ResourceData, meta interface{}) er
 			return out, statusPhase, nil
 		},
 	}
-	_, err = stateConf.WaitForState()
+	_, err = stateConf.WaitForStateContext(ctx)
 	if err != nil {
-		return err
+		diag.FromErr(err)
 	}
 	log.Printf("[INFO] Project %s deleted", name)
 
@@ -145,7 +153,7 @@ func resourceOpenshiftProjectDelete(d *schema.ResourceData, meta interface{}) er
 	return nil
 }
 
-func resourceOpenshiftProjectExists(d *schema.ResourceData, meta interface{}) (bool, error) {
+func resourceOpenshiftProjectExists(ctx context.Context, d *schema.ResourceData, meta interface{}) (bool, error) {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
 		return false, err
@@ -153,7 +161,7 @@ func resourceOpenshiftProjectExists(d *schema.ResourceData, meta interface{}) (b
 
 	name := d.Id()
 	log.Printf("[INFO] Checking project %s", name)
-	_, err = client.Projects().Get(name, meta_v1.GetOptions{})
+	_, err = client.Projects().Get(ctx, name, meta_v1.GetOptions{})
 	if err != nil {
 		if statusErr, ok := err.(*errors.StatusError); ok && statusErr.ErrStatus.Code == 404 {
 			return false, nil

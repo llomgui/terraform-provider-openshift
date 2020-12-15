@@ -1,7 +1,7 @@
 package openshift
 
 import (
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	v1 "github.com/openshift/api/route/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )

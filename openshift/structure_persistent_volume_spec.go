@@ -3,7 +3,7 @@ package openshift
 import (
 	v1 "k8s.io/api/core/v1"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 // Flatteners
@@ -27,6 +27,9 @@ func flattenAzureDiskVolumeSource(in *v1.AzureDiskVolumeSource) []interface{} {
 	att := make(map[string]interface{})
 	att["disk_name"] = in.DiskName
 	att["data_disk_uri"] = in.DataDiskURI
+	if in.Kind != nil {
+		att["kind"] = string(*in.Kind)
+	}
 	att["caching_mode"] = string(*in.CachingMode)
 	if in.FSType != nil {
 		att["fs_type"] = *in.FSType
@@ -146,6 +149,9 @@ func flattenGlusterfsVolumeSource(in *v1.GlusterfsVolumeSource) []interface{} {
 func flattenHostPathVolumeSource(in *v1.HostPathVolumeSource) []interface{} {
 	att := make(map[string]interface{})
 	att["path"] = in.Path
+	if in.Type != nil {
+		att["type"] = string(*in.Type)
+	}
 	return []interface{}{att}
 }
 
@@ -287,6 +293,10 @@ func expandAzureDiskVolumeSource(l []interface{}) *v1.AzureDiskVolumeSource {
 	}
 	if v, ok := in["read_only"].(bool); ok {
 		obj.ReadOnly = ptrToBool(v)
+	}
+	if v, ok := in["kind"].(string); ok && in["kind"].(string) != "" {
+		kind := v1.AzureDataDiskKind(v)
+		obj.Kind = &kind
 	}
 	return obj
 }
@@ -442,8 +452,10 @@ func expandHostPathVolumeSource(l []interface{}) *v1.HostPathVolumeSource {
 		return &v1.HostPathVolumeSource{}
 	}
 	in := l[0].(map[string]interface{})
+	typ := v1.HostPathType(in["type"].(string))
 	obj := &v1.HostPathVolumeSource{
 		Path: in["path"].(string),
+		Type: &typ,
 	}
 	return obj
 }

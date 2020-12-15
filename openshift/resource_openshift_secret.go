@@ -1,11 +1,13 @@
 package openshift
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"log"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	api "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,13 +18,12 @@ import (
 
 func resourceOpenshiftSecret() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceOpenshiftSecretCreate,
-		Read:   resourceOpenshiftSecretRead,
-		Exists: resourceOpenshiftSecretExists,
-		Update: resourceOpenshiftSecretUpdate,
-		Delete: resourceOpenshiftSecretDelete,
+		CreateContext: resourceOpenshiftSecretCreate,
+		ReadContext:   resourceOpenshiftSecretRead,
+		UpdateContext: resourceOpenshiftSecretUpdate,
+		DeleteContext: resourceOpenshiftSecretDelete,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 
 		Schema: map[string]*schema.Schema{
@@ -60,10 +61,10 @@ func decodeBase64Value(value interface{}) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(enc)
 }
 
-func resourceOpenshiftSecretCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenshiftSecretCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	conn, err := kubernetes.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	// Merge data and base64-encoded data into a single data map
@@ -72,7 +73,7 @@ func resourceOpenshiftSecretCreate(d *schema.ResourceData, meta interface{}) err
 		// Decode Terraform's base64 representation to avoid double-encoding in Kubernetes.
 		decodedValue, err := decodeBase64Value(value)
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 		dataMap[key] = string(decodedValue)
 	}
@@ -88,41 +89,51 @@ func resourceOpenshiftSecretCreate(d *schema.ResourceData, meta interface{}) err
 	}
 
 	log.Printf("[INFO] Creating new secret: %#v", secret)
-	out, err := conn.CoreV1().Secrets(metadata.Namespace).Create(&secret)
+	out, err := conn.CoreV1().Secrets(metadata.Namespace).Create(ctx, &secret, meta_v1.CreateOptions{})
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	log.Printf("[INFO] Submitting new secret: %#v", out)
 	d.SetId(buildId(out.ObjectMeta))
 
-	return resourceOpenshiftSecretRead(d, meta)
+	return resourceOpenshiftSecretRead(ctx, d, meta)
 }
 
-func resourceOpenshiftSecretRead(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenshiftSecretRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	exists, err := resourceOpenshiftSecretExists(ctx, d, meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	if !exists {
+		return diag.Diagnostics{}
+	}
 	conn, err := kubernetes.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	namespace, name, err := idParts(d.Id())
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	log.Printf("[INFO] Reading secret %s", name)
-	secret, err := conn.CoreV1().Secrets(namespace).Get(name, meta_v1.GetOptions{})
+	secret, err := conn.CoreV1().Secrets(namespace).Get(ctx, name, meta_v1.GetOptions{})
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	log.Printf("[INFO] Received secret: %#v", secret)
 	err = d.Set("metadata", flattenMetadata(secret.ObjectMeta, d))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
-	d.Set("type", secret.Type)
+	err = d.Set("type", secret.Type)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
 	secretData := flattenByteMapToStringMap(secret.Data)
 	// Remove base64data keys from the payload before setting the data key on the resource. If
@@ -133,21 +144,24 @@ func resourceOpenshiftSecretRead(d *schema.ResourceData, meta interface{}) error
 		}
 		delete(secretData, key)
 	}
-	//lintignore:XR004
-	d.Set("data", secretData)
+
+	err = d.Set("data", secretData)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
 	return nil
 }
 
-func resourceOpenshiftSecretUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenshiftSecretUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	conn, err := kubernetes.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	namespace, name, err := idParts(d.Id())
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	ops := patchMetadata("metadata.0.", "/metadata/", d)
@@ -171,36 +185,36 @@ func resourceOpenshiftSecretUpdate(d *schema.ResourceData, meta interface{}) err
 
 	data, err := ops.MarshalJSON()
 	if err != nil {
-		return fmt.Errorf("Failed to marshal update operations: %s", err)
+		return diag.Errorf("Failed to marshal update operations: %s", err)
 	}
 
 	log.Printf("[INFO] Updating secret %q: %v", name, data)
-	out, err := conn.CoreV1().Secrets(namespace).Patch(name, pkgApi.JSONPatchType, data)
+	out, err := conn.CoreV1().Secrets(namespace).Patch(ctx, name, pkgApi.JSONPatchType, data, meta_v1.PatchOptions{})
 	if err != nil {
-		return fmt.Errorf("Failed to update secret: %s", err)
+		return diag.Errorf("Failed to update secret: %s", err)
 	}
 
 	log.Printf("[INFO] Submitting updated secret: %#v", out)
 	d.SetId(buildId(out.ObjectMeta))
 
-	return resourceOpenshiftSecretRead(d, meta)
+	return resourceOpenshiftSecretRead(ctx, d, meta)
 }
 
-func resourceOpenshiftSecretDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenshiftSecretDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	conn, err := kubernetes.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	namespace, name, err := idParts(d.Id())
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	log.Printf("[INFO] Deleting secret: %q", name)
-	err = conn.CoreV1().Secrets(namespace).Delete(name, &meta_v1.DeleteOptions{})
+	err = conn.CoreV1().Secrets(namespace).Delete(ctx, name, meta_v1.DeleteOptions{})
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	log.Printf("[INFO] Secret %s deleted", name)
@@ -210,7 +224,7 @@ func resourceOpenshiftSecretDelete(d *schema.ResourceData, meta interface{}) err
 	return nil
 }
 
-func resourceOpenshiftSecretExists(d *schema.ResourceData, meta interface{}) (bool, error) {
+func resourceOpenshiftSecretExists(ctx context.Context, d *schema.ResourceData, meta interface{}) (bool, error) {
 	conn, err := kubernetes.NewForConfig(meta.(*rest.Config))
 	if err != nil {
 		return false, err
@@ -222,7 +236,7 @@ func resourceOpenshiftSecretExists(d *schema.ResourceData, meta interface{}) (bo
 	}
 
 	log.Printf("[INFO] Checking secret %s", name)
-	_, err = conn.CoreV1().Secrets(namespace).Get(name, meta_v1.GetOptions{})
+	_, err = conn.CoreV1().Secrets(namespace).Get(ctx, name, meta_v1.GetOptions{})
 	if err != nil {
 		if statusErr, ok := err.(*errors.StatusError); ok && statusErr.ErrStatus.Code == 404 {
 			return false, nil

@@ -1,11 +1,12 @@
 package openshift
 
 import (
-	"fmt"
+	"context"
 	"log"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	api "github.com/openshift/api/route/v1"
 	client_v1 "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -16,13 +17,12 @@ import (
 
 func resourceOpenshiftRoute() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceOpenshiftRouteCreate,
-		Read:   resourceOpenshiftRouteRead,
-		Update: resourceOpenshiftRouteUpdate,
-		Delete: resourceOpenshiftRouteDelete,
-		Exists: resourceOpenshiftRouteExists,
+		CreateContext: resourceOpenshiftRouteCreate,
+		ReadContext:   resourceOpenshiftRouteRead,
+		UpdateContext: resourceOpenshiftRouteUpdate,
+		DeleteContext: resourceOpenshiftRouteDelete,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 
 		Schema: map[string]*schema.Schema{
@@ -146,10 +146,10 @@ func resourceOpenshiftRoute() *schema.Resource {
 	}
 }
 
-func resourceOpenshiftRouteCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenshiftRouteCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	metadata := expandMetadata(d.Get("metadata").([]interface{}))
@@ -159,113 +159,120 @@ func resourceOpenshiftRouteCreate(d *schema.ResourceData, meta interface{}) erro
 	}
 
 	log.Printf("[INFO] Creating new route: %#v", route)
-	out, err := client.Routes(metadata.Namespace).Create(&route)
+	out, err := client.Routes(metadata.Namespace).Create(ctx, &route, meta_v1.CreateOptions{})
 	if err != nil {
-		return fmt.Errorf("Failed to create route: %s", err)
+		return diag.Errorf("Failed to create route: %s", err)
 	}
 	log.Printf("[INFO] Submitted new route: %#v", out)
 	d.SetId(buildId(out.ObjectMeta))
 
-	return resourceOpenshiftRouteRead(d, meta)
+	return resourceOpenshiftRouteRead(ctx, d, meta)
 }
 
-func resourceOpenshiftRouteRead(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenshiftRouteRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	exists, err := resourceOpenshiftRouteExists(ctx, d, meta)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	if !exists {
+		return diag.Diagnostics{}
+	}
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	namespace, name, err := idParts(d.Id())
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	log.Printf("[INFO] Reading route %s", name)
-	route, err := client.Routes(namespace).Get(name, meta_v1.GetOptions{})
+	route, err := client.Routes(namespace).Get(ctx, name, meta_v1.GetOptions{})
 	if err != nil {
 		log.Printf("[DEBUG] Received error: %#v", err)
-		return err
+		return diag.FromErr(err)
 	}
 
 	log.Printf("[INFO] Received route: %#v", route)
 	err = d.Set("metadata", flattenMetadata(route.ObjectMeta, d))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	spec, err := flattenRouteSpec(route.Spec)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	err = d.Set("spec", spec)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	return nil
 }
 
-func resourceOpenshiftRouteUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenshiftRouteUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	namespace, name, err := idParts(d.Id())
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	ops := patchMetadata("metadata.0.", "/metadata/", d)
 	if d.HasChange("spec") {
 		diffOps, err := patchRouteSpec("spec.0.", "/spec/", d)
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 		ops = append(ops, diffOps...)
 	}
 
 	data, err := ops.MarshalJSON()
 	if err != nil {
-		return fmt.Errorf("Failed to marshal update operations: %s", err)
+		return diag.Errorf("Failed to marshal update operations: %s", err)
 	}
 
 	log.Printf("[INFO] Updating route %q: %v", name, string(data))
-	out, err := client.Routes(namespace).Patch(name, pkgApi.JSONPatchType, data)
+	out, err := client.Routes(namespace).Patch(ctx, name, pkgApi.JSONPatchType, data, meta_v1.PatchOptions{})
 	if err != nil {
-		return fmt.Errorf("Failed to update route: %s", err)
+		return diag.Errorf("Failed to update route: %s", err)
 	}
 	log.Printf("[INFO] Submitted updated route: %#v", out)
 
 	d.SetId(buildId(out.ObjectMeta))
 
-	return resourceOpenshiftRouteRead(d, meta)
+	return resourceOpenshiftRouteRead(ctx, d, meta)
 }
 
-func resourceOpenshiftRouteDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenshiftRouteDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	namespace, name, err := idParts(d.Id())
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	log.Printf("[INFO] Deleting route: %#v", name)
 
-	err = client.Routes(namespace).Delete(name, &meta_v1.DeleteOptions{})
+	err = client.Routes(namespace).Delete(ctx, name, meta_v1.DeleteOptions{})
 	if err != nil {
-		return fmt.Errorf("Failed to delete route: %s", err)
+		return diag.Errorf("Failed to delete route: %s", err)
 	}
 
 	d.SetId("")
 	return nil
 }
 
-func resourceOpenshiftRouteExists(d *schema.ResourceData, meta interface{}) (bool, error) {
+func resourceOpenshiftRouteExists(ctx context.Context, d *schema.ResourceData, meta interface{}) (bool, error) {
 	client, err := client_v1.NewForConfig(meta.(*rest.Config))
 	if err != nil {
 		return false, err
@@ -277,7 +284,7 @@ func resourceOpenshiftRouteExists(d *schema.ResourceData, meta interface{}) (boo
 	}
 
 	log.Printf("[INFO] Checking route %s", name)
-	_, err = client.Routes(namespace).Get(name, meta_v1.GetOptions{})
+	_, err = client.Routes(namespace).Get(ctx, name, meta_v1.GetOptions{})
 	if err != nil {
 		if statusErr, ok := err.(*errors.StatusError); ok && statusErr.ErrStatus.Code == 404 {
 			return false, nil

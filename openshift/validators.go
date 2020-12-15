@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"k8s.io/apimachinery/pkg/api/resource"
 	apiValidation "k8s.io/apimachinery/pkg/api/validation"
 	utilValidation "k8s.io/apimachinery/pkg/util/validation"
@@ -161,6 +161,7 @@ func validateModeBits(value interface{}, key string) (ws []string, es []error) {
 	return
 }
 
+//nolint:staticcheck
 func validateAttributeValueDoesNotContain(searchString string) schema.SchemaValidateFunc {
 	return func(v interface{}, k string) (ws []string, errors []error) {
 		input := v.(string)
@@ -173,6 +174,7 @@ func validateAttributeValueDoesNotContain(searchString string) schema.SchemaVali
 	}
 }
 
+//nolint:staticcheck
 func validateAttributeValueIsIn(validValues []string) schema.SchemaValidateFunc {
 	return func(v interface{}, k string) (ws []string, errors []error) {
 		input := v.(string)
@@ -187,6 +189,16 @@ func validateAttributeValueIsIn(validValues []string) schema.SchemaValidateFunc 
 			errors = append(errors, fmt.Errorf(
 				"%q must contain a value from %#v, got %q",
 				k, validValues, input))
+		}
+		return
+	}
+}
+
+func validateIntGreaterThan(minValue int) func(value interface{}, key string) (ws []string, es []error) {
+	return func(value interface{}, key string) (ws []string, es []error) {
+		v := value.(int)
+		if v < minValue {
+			es = append(es, fmt.Errorf("%s must be greater than or equal to %d", key, minValue))
 		}
 		return
 	}
