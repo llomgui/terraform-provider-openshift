@@ -77,7 +77,7 @@ func resourceOpenshiftDeploymentConfig() *schema.Resource {
 							Elem:        &schema.Schema{Type: schema.TypeString},
 							Description: "(object) Selector is a label query over pods that should match the Replicas count.",
 							Optional:    true,
-							ForceNew:    true,
+							ForceNew:    false,
 						},
 						"strategy": {
 							Type:        schema.TypeList,
