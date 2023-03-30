@@ -13,7 +13,6 @@ clean:
 tools:
 	GO111MODULE=off go get github.com/x-motemen/gobump/cmd/gobump
 	GO111MODULE=off go get golang.org/x/tools/cmd/goimports
-	GO111MODULE=off go get github.com/bflad/tfproviderdocs
 	GO111MODULE=off go get github.com/bflad/tfproviderlint/cmd/tfproviderlintx
 	GO111MODULE=off go get github.com/client9/misspell/cmd/misspell
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $$(go env GOPATH)/bin v1.24.0
@@ -70,11 +69,11 @@ goimports:
 fmt:
 	find . -name '*.go' | grep -v vendor | xargs gofmt -s -w
 
-.PHONY: docscheck
-docscheck:
-	tfproviderdocs check \
-		-require-resource-subcategory \
-		-require-guide-subcategory
+# .PHONY: docscheck
+# docscheck:
+# 	tfproviderdocs check \
+# 		-require-resource-subcategory \
+# 		-require-guide-subcategory
 
 .PHONY: website
 website:
