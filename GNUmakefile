@@ -1,79 +1,75 @@
-TEST?=$$(go list ./... |grep -v 'vendor')
-WEBSITE_REPO=github.com/hashicorp/terraform-website
-PKG_NAME=openshift
+# PROVIDER_DIR is used instead of PWD since docker volume commands can be dangerous to run in $HOME.
+# This ensures docker volumes are mounted from within provider directory instead.
+PROVIDER_DIR := $(abspath $(lastword $(dir $(MAKEFILE_LIST))))
+TEST         := "$(PROVIDER_DIR)/openshift"
+GOFMT_FILES  := $$(find $(PROVIDER_DIR) -name '*.go' |grep -v vendor)
+WEBSITE_REPO := github.com/hashicorp/terraform-website
+PKG_NAME     := openshift
+OS_ARCH      := $(shell go env GOOS)_$(shell go env GOARCH)
+TF_PROV_DOCS := $(PWD)/openshift/test-infra/tfproviderdocs
 
-export GO111MODULE=on
+ifneq ($(PWD),$(PROVIDER_DIR))
+$(error "Makefile must be run from the provider directory")
+endif
 
-default: fmt goimports lint tflint docscheck
+default: build
 
-clean:
-	rm -f $(CURDIR)/terraform-provider-openshift
+all: build depscheck fmtcheck test testacc test-compile tools vet
 
-.PHONY: tools
 tools:
-	GO111MODULE=off go get github.com/x-motemen/gobump/cmd/gobump
-	GO111MODULE=off go get golang.org/x/tools/cmd/goimports
-	GO111MODULE=off go get github.com/bflad/tfproviderlint/cmd/tfproviderlintx
-	GO111MODULE=off go get github.com/client9/misspell/cmd/misspell
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $$(go env GOPATH)/bin v1.24.0
+	go install github.com/client9/misspell/cmd/misspell@v0.3.4
+	go install github.com/bflad/tfproviderlint/cmd/tfproviderlint@v0.28.1
+	go install github.com/bflad/tfproviderdocs@v0.9.1
+	go install github.com/katbyte/terrafmt@v0.5.2
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.50.0
+	go install github.com/hashicorp/go-changelog/cmd/changelog-build@latest
+	go install github.com/hashicorp/go-changelog/cmd/changelog-entry@latest
 
+build: fmtcheck
+	go install
 
-.PHONY: build-envs
-build-envs:
-	$(eval CURRENT_VERSION ?= $(shell gobump show -r openshift/))
-	$(eval BUILD_LDFLAGS := "-s -w -X github.com/llomgui/terraform-provider-openshift/openshift.Revision=`git rev-parse --short HEAD`")
+depscheck:
+	@echo "==> Checking source code with 'git diff'..."
+	@git diff --check || exit 1
+	@echo "==> Checking source code with go mod tidy..."
+	@go mod tidy
+	@git diff --exit-code -- go.mod go.sum || \
+		(echo; echo "Unexpected difference in go.mod/go.sum files. Run 'go mod tidy' command or revert any go.mod/go.sum changes and commit."; exit 1)
+	@echo "==> Checking source code with go mod vendor..."
+	@go mod vendor
+	@git diff --exit-code -- vendor || \
+		(echo; echo "Unexpected difference in vendor/ directory. Run 'go mod vendor' command or revert any go.mod/go.sum/vendor changes and commit."; exit 1)
 
-.PHONY: build
-build: build-envs
-	GOOS=$${OS:-"`go env GOOS`"} GOARCH=$${ARCH:-"`go env GOARCH`"} CGO_ENABLED=0 go build -ldflags=$(BUILD_LDFLAGS)
+fmt:
+	gofmt -w $(GOFMT_FILES)
 
-.PHONY: shasum
-shasum:
-	(cd bin/; shasum -a 256 * > terraform-provider-openshift_$(CURRENT_VERSION)_SHA256SUMS)
+fmtcheck:
+	@./scripts/gofmtcheck.sh
 
-# .PHONY: release
-# release: build-envs
-# 	goreleaser release --rm-dist
-
-.PHONY: test
-test:
-	go test -i $(TEST) || exit 1
+test: fmtcheck
+	go test $(TEST) || exit 1
 	echo $(TEST) | \
 		xargs -t -n4 go test $(TESTARGS) -timeout=30s -parallel=4
 
-.PHONY: testacc
-testacc:
-	TF_ACC=1 go test $(TEST) -v $(TESTARGS) -timeout 120m
+testacc: fmtcheck vet
+	TF_ACC=1 go test $(TEST) -v $(TESTARGS) -timeout 3h
 
-.PHONY: lint
-lint:
-	golangci-lint run ./...
+test-compile:
+	@if [ "$(TEST)" = "./..." ]; then \
+		echo "ERROR: Set TEST to a specific package. For example,"; \
+		echo "  make test-compile TEST=./$(PKG_NAME)"; \
+		exit 1; \
+	fi
+	go test -c $(TEST) $(TESTARGS)
 
-.PHONY: tflint
-tflint:
-	tfproviderlintx \
-        -AT001 -AT002 -AT003 -AT004 -AT005 -AT006 -AT007 -AT008 \
-        -R001 -R002 -R004 -R005 -R006 -R007 -R008 -R009 -R010 -R011 -R012 -R013 -R014 \
-        -S001 -S002 -S003 -S004 -S005 -S006 -S007 -S008 -S009 -S010 -S011 -S012 -S013 -S014 -S015 \
-        -S016 -S017 -S018 -S019 -S020 -S021 -S022 -S023 -S024 -S025 -S026 -S027 -S028 -S029 -S030 \
-        -S031 -S032 -S033 -S034 \
-        -V001 -V002 -V003 -V004 -V005 -V006 -V007 -V008 \
-        -XR001 -XR004 \
-        ./$(PKG_NAME)
-
-.PHONY: goimports
-goimports:
-	goimports -l -w $(PKG_NAME)/
-
-.PHONY: fmt
-fmt:
-	find . -name '*.go' | grep -v vendor | xargs gofmt -s -w
-
-# .PHONY: docscheck
-# docscheck:
-# 	tfproviderdocs check \
-# 		-require-resource-subcategory \
-# 		-require-guide-subcategory
+vet:
+	@echo "go vet ."
+	@go vet $$(go list ./... | grep -v vendor/) ; if [ $$? -eq 1 ]; then \
+		echo ""; \
+		echo "Vet found suspicious constructs. Please check the reported constructs"; \
+		echo "and fix them if necessary before submitting the code for review."; \
+		exit 1; \
+	fi
 
 .PHONY: website
 website:
@@ -103,3 +99,5 @@ ifeq (,$(wildcard $(GOPATH)/src/$(WEBSITE_REPO)))
 	)
 endif
 	@$(MAKE) -C $(GOPATH)/src/$(WEBSITE_REPO) website-provider-test PROVIDER_PATH=$(shell pwd) PROVIDER_NAME=$(PKG_NAME)
+
+.PHONY: build test testacc tools vet fmt fmtcheck terrafmt test-compile depscheck tests-lint tests-lint-fix website-lint website-lint-fix changelog changelog-entry
