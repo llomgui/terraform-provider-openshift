@@ -1,4 +1,4 @@
-FROM golang:1.14 as builder
+FROM golang:1.19.4 as builder
 
 RUN  apt-get update && apt-get -y install bash git make zip bzr && apt-get clean && rm -rf /var/cache/apt/archives/* /var/lib/apt/lists/*
 ADD . /go/src/github.com/llomgui/terraform-provider-openshift
