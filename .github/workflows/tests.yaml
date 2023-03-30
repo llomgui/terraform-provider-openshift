@@ -39,7 +39,6 @@ jobs:
         go-version-file: 'go.mod'
     - name: Run tests
       run: |
-        # make website-lint
         make depscheck
         make fmtcheck
         make test
