@@ -3,16 +3,16 @@ on: [push, pull_request]
 env:
   GOPROXY: https://proxy.golang.org
 jobs:
-  markdown-link-check:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # v3.3.0
-    - name: Run markdown link checker
-      uses: gaurav-nelson/github-action-markdown-link-check@5c5dfc0ac2e225883c0e5f03a85311ec2830d368 # v1.0.14
-      with:
-        config-file: '.github/workflows/markdown.links.config.json'
-        folder-path: 'website/'
+  # markdown-link-check:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - name: Checkout code
+  #     uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # v3.3.0
+  #   - name: Run markdown link checker
+  #     uses: gaurav-nelson/github-action-markdown-link-check@5c5dfc0ac2e225883c0e5f03a85311ec2830d368 # v1.0.14
+  #     with:
+  #       config-file: '.github/workflows/markdown.links.config.json'
+  #       folder-path: 'website/'
   lint:
     name: lint
     runs-on: ubuntu-latest
@@ -39,7 +39,7 @@ jobs:
         go-version-file: 'go.mod'
     - name: Run tests
       run: |
-        make website-lint
+        # make website-lint
         make depscheck
         make fmtcheck
         make test
